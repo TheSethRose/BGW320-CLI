@@ -42,6 +42,7 @@ export type SweepPage = {
   sessionPoolFull?: boolean;
   waitedMs?: number;
   retryCount?: number;
+  skipped?: boolean;
   rawHtml?: string;
   parsed?: ParsedPage;
   controls?: SweepControlDetails;
@@ -61,14 +62,33 @@ type SweepOptions = {
   includeRaw?: boolean | undefined;
   useFallbacks?: boolean | undefined;
   includeSecrets?: boolean | undefined;
+  onPageProgress?: ((event: { index: number; total: number; page: string; phase: "start" | "finish"; status?: "ok" | "failed" | "skipped" }) => void) | undefined;
 };
 
 export async function sweepRouter(client: BGW320Client, options: SweepOptions): Promise<SweepPage[]> {
   const pages: SweepPage[] = [];
   const tabs = sweepTabs(options.pages);
 
-  for (const tab of tabs) {
-    pages.push(await safeSweepPage(client, tab, options));
+  for (let index = 0; index < tabs.length; index += 1) {
+    const tab = tabs[index]!;
+    options.onPageProgress?.({ index: index + 1, total: tabs.length, page: tab.page, phase: "start" });
+    const page = await safeSweepPage(client, tab, options);
+    pages.push(page);
+    options.onPageProgress?.({ index: index + 1, total: tabs.length, page: tab.page, phase: "finish", status: pageStatus(page) });
+    if (page.sessionPoolFull) {
+      for (let skippedIndex = index + 1; skippedIndex < tabs.length; skippedIndex += 1) {
+        const skipped = skippedPage(tabs[skippedIndex]!);
+        pages.push(skipped);
+        options.onPageProgress?.({
+          index: skippedIndex + 1,
+          total: tabs.length,
+          page: skipped.page,
+          phase: "finish",
+          status: "skipped",
+        });
+      }
+      break;
+    }
     if (options.delayMs > 0) await sleep(options.delayMs);
   }
 
@@ -370,6 +390,33 @@ function failurePage(tab: RouterTab, error: unknown): SweepPage {
       retryCount: sessionError.retryCount,
     } : {}),
   });
+}
+
+function skippedPage(tab: RouterTab): SweepPage {
+  return completePage({
+    section: tab.section,
+    label: tab.label,
+    page: tab.page,
+    dangerous: tab.dangerous === true,
+    guarded: tab.dangerous === true,
+    ok: false,
+    skipped: true,
+    sessionPoolFull: true,
+    error: "Skipped because router web session pool is full.",
+    valueCount: 0,
+    tableRows: 0,
+    fieldCount: 0,
+    selectCount: 0,
+    textareaCount: 0,
+    buttonCount: 0,
+    formCount: 0,
+    dataCount: 0,
+  });
+}
+
+function pageStatus(page: SweepPage): "ok" | "failed" | "skipped" {
+  if (page.skipped) return "skipped";
+  return page.ok ? "ok" : "failed";
 }
 
 function isJunkOnly(parsed: ParsedPage): boolean {

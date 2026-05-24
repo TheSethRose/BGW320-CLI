@@ -85,6 +85,33 @@ test("bad access code does not retry as session-pool-full", async () => {
   expect(waitEvents).toHaveLength(0);
 });
 
+test("session snapshots can be reused without logging in again", async () => {
+  const calls: string[] = [];
+
+  await withFetch(async (url, init) => {
+    calls.push(`${init?.method ?? "GET"} ${new URL(String(url)).pathname} ${String((init?.headers as Record<string, string> | undefined)?.Cookie ?? "")}`);
+    if ((init?.method ?? "GET") === "POST") {
+      return htmlResponse("", { status: 302, headers: { location: "/cgi-bin/home.ha", "set-cookie": "sid=abc; Path=/" } });
+    }
+    if (String(url).endsWith("/cgi-bin/diag.ha")) {
+      return htmlResponse("<title>diag</title>");
+    }
+    return htmlResponse(loginNonceHtml("abc123"));
+  }, async () => {
+    const first = testClient();
+    await first.login();
+    const second = testClient();
+    second.importSession(first.exportSession());
+    await second.getCgiPage("diag");
+  });
+
+  expect(calls).toEqual([
+    "GET /cgi-bin/login.ha ",
+    "POST /cgi-bin/login.ha ",
+    "GET /cgi-bin/diag.ha sid=abc",
+  ]);
+});
+
 function testClient(overrides: Partial<ConstructorParameters<typeof BGW320Client>[0]> = {}): BGW320Client {
   return new BGW320Client({
     host: "http://router.local",

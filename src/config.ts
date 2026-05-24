@@ -11,6 +11,9 @@ export type GlobalOptions = {
   waitForSession: boolean;
   sessionWaitTimeoutMs: number;
   sessionWaitIntervalMs: number;
+  sessionCacheTtlMs: number;
+  sessionPoolCooldownMs: number;
+  sessionLockTimeoutMs: number;
 };
 
 export async function resolveAccessCode(options: GlobalOptions): Promise<string | undefined> {
@@ -36,5 +39,8 @@ export function envDefaultOptions(): GlobalOptions {
     waitForSession: process.env.BGW_WAIT_FOR_SESSION === "1",
     sessionWaitTimeoutMs: Number(process.env.BGW_SESSION_WAIT_TIMEOUT_MS || 120000),
     sessionWaitIntervalMs: Number(process.env.BGW_SESSION_WAIT_INTERVAL_MS || 10000),
+    sessionCacheTtlMs: Number(process.env.BGW_SESSION_CACHE_TTL_MS || 120000),
+    sessionPoolCooldownMs: Number(process.env.BGW_SESSION_POOL_COOLDOWN_MS || 300000),
+    sessionLockTimeoutMs: Number(process.env.BGW_SESSION_LOCK_TIMEOUT_MS || 300000),
   };
 }

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { URL, URLSearchParams } from "node:url";
-import type { HttpMethod, HttpResponse, RouterClientOptions } from "./types.js";
+import type { HttpMethod, HttpResponse, RouterClientOptions, RouterSessionSnapshot } from "./types.js";
 import { looksLikeLogin } from "./parser.js";
 
 class RouterError extends Error {}
@@ -36,6 +36,36 @@ export class BGW320Client {
     const host = options.host.replace(/\/+$/, "");
     this.baseUrl = new URL(/^https?:\/\//i.test(host) ? host : `https://${host}`);
     this.options = options;
+  }
+
+  sessionIdentity(): string {
+    return this.baseUrl.origin;
+  }
+
+  hasAuthenticatedSession(): boolean {
+    return this.authenticated && this.cookies.size > 0;
+  }
+
+  exportSession(): RouterSessionSnapshot {
+    return {
+      origin: this.baseUrl.origin,
+      authenticated: this.authenticated,
+      cookies: Object.fromEntries(this.cookies.entries()),
+    };
+  }
+
+  importSession(snapshot: RouterSessionSnapshot): void {
+    if (snapshot.origin !== this.baseUrl.origin || snapshot.authenticated !== true) return;
+    this.cookies.clear();
+    for (const [name, value] of Object.entries(snapshot.cookies)) {
+      if (name && value) this.cookies.set(name, value);
+    }
+    this.authenticated = this.cookies.size > 0;
+  }
+
+  clearSession(): void {
+    this.cookies.clear();
+    this.authenticated = false;
   }
 
   async check(): Promise<{ host: string; reachable: boolean; title: string; authenticated: boolean }> {

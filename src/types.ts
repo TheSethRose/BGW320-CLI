@@ -10,6 +10,12 @@ export type RouterClientOptions = {
   onSessionWait?: ((event: { waitedMs: number; retryCount: number; timeoutMs: number; intervalMs: number }) => void) | undefined;
 };
 
+export type RouterSessionSnapshot = {
+  origin: string;
+  authenticated: boolean;
+  cookies: Record<string, string>;
+};
+
 export type HttpMethod = "GET" | "POST";
 
 export type HttpResponse = {

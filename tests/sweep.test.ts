@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
+import { RouterSessionPoolFullError } from "../src/client.js";
 import { scanRouter } from "../src/scan.js";
 import { sweepRouter } from "../src/sweep.js";
 
@@ -30,6 +31,31 @@ test("sweep continues after per-page failure", async () => {
     { page: "diag", ok: true },
   ]);
   expect(pages[0]?.error).toContain("boom");
+});
+
+test("sweep stops fetching and marks remaining pages skipped when session pool is full", async () => {
+  const client = fakeClient({ sessionPoolFullPages: new Set(["dhcpserver"]) });
+  const progress: unknown[] = [];
+
+  const pages = await sweepRouter(client as never, {
+    delayMs: 0,
+    pages: ["wconfig_unified", "dhcpserver", "diag"],
+    useFallbacks: false,
+    onPageProgress: (event) => progress.push(event),
+  });
+
+  expect(client.calls).toEqual(["wconfig_unified", "dhcpserver"]);
+  expect(pages.map((page) => ({
+    page: page.page,
+    ok: page.ok,
+    skipped: page.skipped,
+    sessionPoolFull: page.sessionPoolFull,
+  }))).toEqual([
+    { page: "wconfig_unified", ok: true, skipped: undefined, sessionPoolFull: undefined },
+    { page: "dhcpserver", ok: false, skipped: undefined, sessionPoolFull: true },
+    { page: "diag", ok: false, skipped: true, sessionPoolFull: true },
+  ]);
+  expect(progress).toContainEqual({ index: 3, total: 3, page: "diag", phase: "finish", status: "skipped" });
 });
 
 test("sweep default result is compact and parsed data is opt-in", async () => {
@@ -116,13 +142,14 @@ test("CLI and fixture capture are wired to the shared sweep core", () => {
   expect(capture).toContain("sweepRouter");
 });
 
-function fakeClient(options: { failPages?: Set<string> } = {}): { calls: string[]; getCgiPage: (page: string) => Promise<unknown> } {
+function fakeClient(options: { failPages?: Set<string>; sessionPoolFullPages?: Set<string> } = {}): { calls: string[]; getCgiPage: (page: string) => Promise<unknown> } {
   const calls: string[] = [];
   return {
     calls,
     async getCgiPage(page: string) {
       calls.push(page);
       if (options.failPages?.has(page)) throw new Error(`boom ${page}`);
+      if (options.sessionPoolFullPages?.has(page)) throw new RouterSessionPoolFullError("pool full", { waitedMs: 5, retryCount: 2 });
       return {
         statusCode: 200,
         statusMessage: "OK",

@@ -7,11 +7,17 @@ test("envDefaultOptions reads opt-in session wait settings", () => {
     process.env.BGW_WAIT_FOR_SESSION = "1";
     process.env.BGW_SESSION_WAIT_TIMEOUT_MS = "30000";
     process.env.BGW_SESSION_WAIT_INTERVAL_MS = "2500";
+    process.env.BGW_SESSION_CACHE_TTL_MS = "90000";
+    process.env.BGW_SESSION_POOL_COOLDOWN_MS = "240000";
+    process.env.BGW_SESSION_LOCK_TIMEOUT_MS = "180000";
 
     expect(envDefaultOptions()).toMatchObject({
       waitForSession: true,
       sessionWaitTimeoutMs: 30000,
       sessionWaitIntervalMs: 2500,
+      sessionCacheTtlMs: 90000,
+      sessionPoolCooldownMs: 240000,
+      sessionLockTimeoutMs: 180000,
     });
   } finally {
     restoreEnv(original);
@@ -23,6 +29,9 @@ function snapshotEnv(): Record<string, string | undefined> {
     BGW_WAIT_FOR_SESSION: process.env.BGW_WAIT_FOR_SESSION,
     BGW_SESSION_WAIT_TIMEOUT_MS: process.env.BGW_SESSION_WAIT_TIMEOUT_MS,
     BGW_SESSION_WAIT_INTERVAL_MS: process.env.BGW_SESSION_WAIT_INTERVAL_MS,
+    BGW_SESSION_CACHE_TTL_MS: process.env.BGW_SESSION_CACHE_TTL_MS,
+    BGW_SESSION_POOL_COOLDOWN_MS: process.env.BGW_SESSION_POOL_COOLDOWN_MS,
+    BGW_SESSION_LOCK_TIMEOUT_MS: process.env.BGW_SESSION_LOCK_TIMEOUT_MS,
   };
 }
 

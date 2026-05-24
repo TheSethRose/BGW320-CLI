@@ -12,6 +12,7 @@ import { fetchDeviceStatus, fetchHomeNetworkStatus, fetchSecurityOptions, fetchS
 import { buildAudit } from "./audit.js";
 import { fetchDeviceList } from "./devices.js";
 import { actionCommitted, actionDryRun, diagnosticCommitted, diagnosticDryRun, setCommitted, setDryRun, submitCommitted, submitDryRun } from "./operations.js";
+import { clearSessionState, readSessionState, routerSessionIdentity, withRouterSession } from "./session.js";
 import { stripLargePayloads, sweepRouter, writeSweepArtifacts, type SweepPage } from "./sweep.js";
 
 type Command = {
@@ -57,6 +58,20 @@ async function main(argv: string[]): Promise<void> {
     },
   });
 
+  if (!usesSessionCoordinator(command)) {
+    await runCommand(client, command);
+    return;
+  }
+
+  await withRouterSession(client, {
+    cacheTtlMs: command.options.sessionCacheTtlMs,
+    poolCooldownMs: command.options.sessionPoolCooldownMs,
+    lockTimeoutMs: command.options.sessionLockTimeoutMs,
+    waitForSession: command.options.waitForSession,
+  }, () => runCommand(client, command));
+}
+
+async function runCommand(client: BGW320Client, command: Command): Promise<void> {
   switch (command.name) {
     case "check": {
       const result = await client.check();
@@ -115,6 +130,26 @@ async function main(argv: string[]): Promise<void> {
         }
       });
       return;
+    }
+
+    case "session": {
+      const action = command.args[0] ?? "status";
+      const origin = routerSessionIdentity(command.options.host);
+      if (action === "status") {
+        const state = await readSessionState(origin);
+        output(command, state, () => printKeyValues({
+          "Cached session": state.cached ? "yes" : "no",
+          "Cache expires": state.cacheExpiresAt ? new Date(state.cacheExpiresAt).toISOString() : "(none)",
+          "Pool cooldown until": state.poolCooldownUntil ? new Date(state.poolCooldownUntil).toISOString() : "(none)",
+        }));
+        return;
+      }
+      if (action === "clear-cache") {
+        await clearSessionState(origin);
+        output(command, { ok: true, cleared: true }, () => process.stdout.write("session cache cleared\n"));
+        return;
+      }
+      throw new Error(`Unknown session command: ${action}`);
     }
 
     case "action": {
@@ -334,6 +369,10 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
+function usesSessionCoordinator(command: Command): boolean {
+  return !["actions", "coverage", "section", "session", "sitemap", "tabs"].includes(command.name);
+}
+
 async function printPageCommand(client: BGW320Client, command: Command, page: string, options: { forms: boolean }): Promise<void> {
   if (page === "home" && !command.options.raw) {
     const status = await fetchDeviceStatus(client, { includeSecrets: command.options.includeSecrets });
@@ -401,6 +440,13 @@ async function runSweepCommand(client: BGW320Client, command: Command, options: 
     includeRaw,
     includeSecrets: command.options.includeSecrets,
     useFallbacks: !includeRaw,
+    onPageProgress: command.options.json ? undefined : (event) => {
+      if (event.phase === "start") {
+        process.stderr.write(`sweep ${event.index}/${event.total} ${event.page} start\n`);
+        return;
+      }
+      process.stderr.write(`sweep ${event.index}/${event.total} ${event.page} ${event.status ?? "failed"}\n`);
+    },
   });
 
   if (command.options.raw && !writeArtifacts && !command.options.json) {
@@ -592,6 +638,10 @@ Generic inspection:
   bgw tabs | section <section> | sitemap | coverage
     Show the local tab map, one section, live sitemap, or sitemap-vs-CLI coverage.
 
+  bgw session status | clear-cache
+    Inspect or clear local session coordination state. clear-cache does not call
+    an unverified router logout endpoint.
+
   bgw sweep [--json] [--pages diag,dhcpserver] [--include-parsed] [--forms] [--out router-dumps/latest]
     Shared traversal command for every mapped tab. Default output is compact
     status/count metadata. Full parsed payloads, form details, raw HTML, and
@@ -660,6 +710,9 @@ Notes:
   The router web UI is flaky. Fallbacks are intentionally narrow so normal commands stay fast.
   Session-pool waiting is opt-in so basic commands do not appear hung. Env:
   BGW_WAIT_FOR_SESSION=1, BGW_SESSION_WAIT_TIMEOUT_MS, BGW_SESSION_WAIT_INTERVAL_MS.
+  Agent bursts reuse a short-lived local router session cache under a per-host
+  lock to avoid filling the web session pool. Env:
+  BGW_SESSION_CACHE_TTL_MS, BGW_SESSION_POOL_COOLDOWN_MS, BGW_SESSION_LOCK_TIMEOUT_MS.
   JSON dry-runs include operation, dryRun, committed, page, guarded, dangerous,
   confirmation, commitCommand, payload, and changes/result fields where applicable.
 
