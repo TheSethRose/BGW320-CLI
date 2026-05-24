@@ -58,7 +58,7 @@ printf '<access-code>' | bun run src/cli.ts wifi --access-code-stdin
 
 ## Router Command Tree
 
-All of these commands accept `--json`. Use `--forms` to include form controls in normal terminal output.
+All of these commands accept `--json`. Parsed page JSON includes a `summary` object with the same high-value fields used by the terminal view, plus the underlying values, tables, controls, buttons, and forms. Use `--forms` to include form controls in normal terminal output.
 
 ```bash
 bun run src/cli.ts device status
@@ -150,6 +150,8 @@ tests/fixtures/router-html/<page>.html
 tests/fixtures/parsed/<page>.json
 tests/fixtures/expected/<page>.json
 ```
+
+Generated fixture files are gitignored on purpose. They are sanitized, but they can still reveal local topology, device names, firmware behavior, and configuration shape. Keep them local unless you have manually reviewed them.
 
 Capture sanitized fixtures from the real router with:
 

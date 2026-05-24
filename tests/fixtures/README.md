@@ -6,6 +6,8 @@ Generated sanitized router evidence lives here:
 - `parsed/<page>.json`: parser output for that HTML.
 - `expected/<page>.json`: expected usefulness/redaction/discovery evidence.
 
+Generated fixture files are intentionally gitignored. Keep them local unless you have manually reviewed them for device names, topology, firmware details, and config values.
+
 Capture with:
 
 ```bash

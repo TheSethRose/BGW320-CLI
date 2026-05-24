@@ -1,7 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
+import { parsedPageOutput } from "../src/format.js";
 import { resolveSectionCommand } from "../src/pages.js";
+import type { ParsedPage } from "../src/types.js";
 
 type ExpectedFixture = {
   page: string;
@@ -20,6 +22,7 @@ type ExpectedFixture = {
 };
 
 const expectedDir = join(process.cwd(), "tests", "fixtures", "expected");
+const parsedDir = join(process.cwd(), "tests", "fixtures", "parsed");
 
 const commandPages: Array<{ command: string[]; page: string }> = [
   { command: ["device", "status"], page: "home" },
@@ -67,12 +70,19 @@ test("human router tab commands resolve to captured fixture pages", () => {
   for (const { command, page } of commandPages) {
     const [root, ...args] = command;
     expect(resolveSectionCommand(root!, args)?.page, command.join(" ")).toBe(page);
-    expect(readExpected(page).page, command.join(" ")).toBe(page);
-    expect(readExpected(page).secretsRedacted, command.join(" ")).toBe(true);
+    if (existsSync(join(expectedDir, `${page}.json`))) {
+      expect(readExpected(page).page, command.join(" ")).toBe(page);
+      expect(readExpected(page).secretsRedacted, command.join(" ")).toBe(true);
+    }
   }
 });
 
 test("Diagnostics/Troubleshoot fixture proves inputs, actions, progress, and form target", () => {
+  if (!existsSync(join(expectedDir, "diag.json"))) {
+    process.stdout.write("diagnostics fixture not present; run `bun run fixtures:capture` with BGW_ACCESS_CODE when the router session pool is available\n");
+    return;
+  }
+
   const expected = readExpected("diag");
 
   expect(expected.pageLoads).toBe(true);
@@ -99,6 +109,42 @@ test("Diagnostics/Troubleshoot fixture proves inputs, actions, progress, and for
   expect(expected.formActions).toEqual(["/cgi-bin/diag.ha"]);
 });
 
+test("fixture-backed parsed page JSON includes scriptable summaries", () => {
+  if (!existsSync(join(parsedDir, "diag.json"))) {
+    process.stdout.write("parsed fixture pack not present; run `bun run fixtures:capture` with BGW_ACCESS_CODE when the router session pool is available\n");
+    return;
+  }
+
+  const speed = parsedPageOutput(readParsed("speed"));
+  expect(speed.summary).toEqual(expect.objectContaining({
+    Results: "8",
+    "By result": "Success: 8",
+  }));
+  expect(speed.tables.length).toBe(8);
+
+  const natTable = parsedPageOutput(readParsed("nattable"));
+  expect(natTable.summary).toEqual(expect.objectContaining({
+    "Total sessions available": expect.any(String),
+    "Displayed sessions": "356",
+  }));
+
+  const diagnostics = parsedPageOutput(readParsed("diag"));
+  expect(diagnostics.summary).toEqual(expect.objectContaining({
+    Description: expect.any(String),
+    "Field protopref": "IPv4",
+  }));
+  expect(diagnostics.tables).toEqual(expect.arrayContaining([
+    expect.objectContaining({ Test: "Ethernet" }),
+    expect.objectContaining({ Test: "Authentication" }),
+    expect.objectContaining({ Test: "IP" }),
+    expect.objectContaining({ Test: "DNS" }),
+  ]));
+});
+
 function readExpected(page: string): ExpectedFixture {
   return JSON.parse(readFileSync(join(expectedDir, `${page}.json`), "utf8")) as ExpectedFixture;
+}
+
+function readParsed(page: string): ParsedPage {
+  return JSON.parse(readFileSync(join(parsedDir, `${page}.json`), "utf8")) as ParsedPage;
 }

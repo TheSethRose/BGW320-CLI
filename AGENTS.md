@@ -122,11 +122,13 @@ const dangerousPages = ["restart", "factory-reset", "reset-connection"];
 
 ### Fixture-First Router Checks
 
-When comparing router paths, parser output, command output, page coverage, or expected page metadata, use the sanitized fixture pack under `tests/fixtures` before hitting a live router endpoint:
+When comparing router paths, parser output, command output, page coverage, or expected page metadata, use the local sanitized fixture pack under `tests/fixtures` before hitting a live router endpoint:
 
 - `tests/fixtures/router-html/<page>.html` for saved router HTML.
 - `tests/fixtures/parsed/<page>.json` for parser output snapshots.
 - `tests/fixtures/expected/<page>.json` for usefulness/redaction/discovery expectations.
+
+Generated fixture files are gitignored because even redacted captures can expose device names, SSIDs, topology, firmware details, and config values. Do not commit generated fixture files unless they have been manually reviewed and scrubbed for public-safe content.
 
 Only hit the live router when explicitly testing client/session behavior, when recapturing fixtures with `bun run fixtures:capture`, or when the user explicitly asks for live-router verification.
 

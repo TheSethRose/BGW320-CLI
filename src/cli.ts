@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { BGW320Client, RouterAuthError, RouterConnectionError } from "./client.js";
 import { envDefaultOptions, resolveAccessCode, type GlobalOptions } from "./config.js";
-import { printAudit, printCompositeStatus, printDeviceList, printDeviceStatus, printJson, printKeyValues, printLogs, printOperation, printPageFetchError, printParsedPage, printScans, printSitemap } from "./format.js";
+import { parsedPageOutput, printAudit, printCompositeStatus, printDeviceList, printDeviceStatus, printJson, printKeyValues, printLogs, printOperation, printPageFetchError, printParsedPage, printScans, printSitemap } from "./format.js";
 import { parseLogs, parsePage, parseSitemap } from "./parser.js";
 import { buildMutationPlan, buildSubmitPlan, confirmTokenForPage, dangerousPages, guardedMutationPages } from "./mutations.js";
 import { listSections, resolvePage, resolveSectionCommand, routerTabs, tabsForSection } from "./pages.js";
@@ -189,7 +189,7 @@ async function main(argv: string[]): Promise<void> {
         const resultPage = parsePage("diag", response.body, { includeSecrets: command.options.includeSecrets });
         const result = extractDiagnosticResult(resultPage);
         const operation = diagnosticCommitted(maybeKind, target, response.statusCode, result || `Router returned status ${response.statusCode}; no progress output found.`);
-        output(command, { ...operation, pageResult: resultPage }, () => printOperation(operation));
+        output(command, { ...operation, pageResult: parsedPageOutput(resultPage) }, () => printOperation(operation));
         return;
       }
 
@@ -374,7 +374,7 @@ async function printPageCommand(client: BGW320Client, command: Command, page: st
     return;
   }
 
-  output(command, result.parsed, () => printParsedPage(result.parsed!, { forms: options.forms, limit: command.options.limit }));
+  output(command, parsedPageOutput(result.parsed), () => printParsedPage(result.parsed!, { forms: options.forms, limit: command.options.limit }));
 }
 
 async function fetchRawPage(client: BGW320Client, command: Command, page: string): Promise<{ body: string } | undefined> {
