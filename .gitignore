@@ -1,0 +1,16 @@
+node_modules/
+*.log
+.env
+.env.*
+dist/
+coverage/
+router-dumps/
+repomix-output.xml
+
+# Real router captures can expose local topology and device-specific config.
+tests/fixtures/router-html/*
+tests/fixtures/parsed/*
+tests/fixtures/expected/*
+!tests/fixtures/router-html/.gitkeep
+!tests/fixtures/parsed/.gitkeep
+!tests/fixtures/expected/.gitkeep
