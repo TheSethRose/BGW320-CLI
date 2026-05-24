@@ -183,7 +183,9 @@ export function parseLogs(html: string): LogEntry[] {
 
 export function looksLikeLogin(html: string): boolean {
   const title = getTitle(html);
-  return /Login/i.test(title) || /Access Code Required/i.test(html) || /id=["']password["']/i.test(html);
+  return /^Login$/i.test(title)
+    || /Access Code Required/i.test(html)
+    || /<form\b[^>]*action=["'][^"']*\/cgi-bin\/login\.ha["'][^>]*>[\s\S]*id=["']password["']/i.test(html);
 }
 
 function parseFields(html: string, includeSecrets: boolean): ParsedField[] {

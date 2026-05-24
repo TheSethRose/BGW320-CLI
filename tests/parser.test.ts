@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseDevices, parsePage, parseSitemap } from "../src/parser.js";
+import { looksLikeLogin, parseDevices, parsePage, parseSitemap } from "../src/parser.js";
 
 test("parseSitemap extracts CGI page names and labels", () => {
   const entries = parseSitemap(`
@@ -166,4 +166,21 @@ test("parsePage extracts page description blocks", () => {
   `);
 
   expect(parsed.values.Description).toBe("You must configure a Public Subnet first.");
+});
+
+test("looksLikeLogin ignores configuration pages with password controls", () => {
+  expect(looksLikeLogin(`
+    <title>Access Code</title>
+    <form action="/cgi-bin/routerpasswd.ha">
+      <input id="password" name="old_password" value="">
+      <input name="new_password" value="">
+    </form>
+  `)).toBe(false);
+
+  expect(looksLikeLogin(`
+    <title>Login</title>
+    <form action="/cgi-bin/login.ha">
+      <input id="password" name="password">
+    </form>
+  `)).toBe(true);
 });
