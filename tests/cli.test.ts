@@ -11,11 +11,21 @@ test("help explains operation, safety, and high-value commands", () => {
   expect(result.stdout).toContain("Auth:");
   expect(result.stdout).toContain("Most-used read commands:");
   expect(result.stdout).toContain("bgw device status");
+  expect(result.stdout).toContain("bgw sweep");
   expect(result.stdout).toContain("bgw audit");
+  expect(result.stdout).toContain("--include-parsed");
+  expect(result.stdout).toContain("--pages <csv>");
+  expect(result.stdout).toContain("--out <dir>");
+  expect(result.stdout).toContain("--wait-for-session");
   expect(result.stdout).toContain("Operations are dry-run by default:");
   expect(result.stdout).toContain("Diagnostics operations:");
   expect(result.stdout).toContain("--access-code-stdin");
   expect(result.stdout).toContain("Fallbacks are intentionally narrow");
+});
+
+test("JSON mode does not configure session wait progress output", async () => {
+  const source = await Bun.file("src/cli.ts").text();
+  expect(source).toContain("onSessionWait: command.options.json ? undefined");
 });
 
 test("diagnostic commit requires confirmation before router access", () => {

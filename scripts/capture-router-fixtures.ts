@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { BGW320Client, RouterAuthError } from "../src/client.js";
+import { BGW320Client } from "../src/client.js";
 import { envDefaultOptions } from "../src/config.js";
 import { parsedDataCount } from "../src/fetch.js";
 import { parsePage } from "../src/parser.js";
 import { routerTabs } from "../src/pages.js";
+import { sweepRouter } from "../src/sweep.js";
 import type { ParsedPage } from "../src/types.js";
 
 type ExpectedFixture = {
@@ -59,6 +60,9 @@ const client = new BGW320Client({
   accessCode,
   timeoutMs: options.timeoutMs,
   insecureTls: options.insecureTls,
+  waitForSession: options.waitForSession,
+  sessionWaitTimeoutMs: options.sessionWaitTimeoutMs,
+  sessionWaitIntervalMs: options.sessionWaitIntervalMs,
   userAgent: "bgw320-cli-fixture-capture/0.1.0",
 });
 
@@ -70,35 +74,32 @@ const requestedPages = process.env.BGW_FIXTURE_PAGES
 const pages = requestedPages?.length ? requestedPages : allPages;
 let captured = 0;
 
-for (const page of pages) {
-  await sleep(delayMs);
-  process.stdout.write(`capturing ${page}... `);
-  try {
-    const response = page === "sitemap"
-      ? await client.getCgiPage(page, { auth: false })
-      : await client.getCgiPage(page);
-    const html = sanitizeRouterText(response.body);
-    const parsed = parsePage(page, html);
-    const expected = expectedFor(page, parsed, response.statusCode >= 200 && response.statusCode < 400 && !isJunkOnly(parsed));
+const sweep = await sweepRouter(client, {
+  delayMs,
+  pages,
+  includeRaw: true,
+  includeParsed: true,
+  includeSecrets: false,
+  useFallbacks: false,
+});
 
-    await writeFile(join(htmlDir, `${page}.html`), `${html.trimEnd()}\n`);
-    await writeFile(join(parsedDir, `${page}.json`), `${JSON.stringify(parsed, null, 2)}\n`);
-    await writeFile(join(expectedDir, `${page}.json`), `${JSON.stringify(expected, null, 2)}\n`);
+for (const pageResult of sweep) {
+  const page = pageResult.page;
+  process.stdout.write(`capturing ${page}... `);
+  if (pageResult.rawHtml) {
+    const html = sanitizeRouterText(pageResult.rawHtml);
+    const parsed = parsePage(page, html);
+    const expected = expectedFor(page, parsed, pageResult.ok && !isJunkOnly(parsed));
+    await writeFixtureSet(page, html, parsed, pageResult.error ? { ...expected, error: sanitizeRouterText(pageResult.error) } : expected);
     captured += 1;
-    process.stdout.write("ok\n");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (error instanceof RouterAuthError) {
-      process.stdout.write(`auth failed: ${message}\n`);
-    } else {
-      process.stdout.write(`failed: ${message}\n`);
-    }
+    process.stdout.write(pageResult.ok ? "ok\n" : `captured error page: ${pageResult.error ?? "unusable response"}\n`);
+  } else {
+    const message = pageResult.error ?? "Router did not return page HTML.";
+    process.stdout.write(`failed: ${message}\n`);
     const html = `<!-- bgw320-cli fixture capture failed for ${page}: ${sanitizeRouterText(message)} -->\n`;
     const parsed = parsePage(page, html);
     const expected = expectedFor(page, parsed, false);
-    await writeFile(join(htmlDir, `${page}.html`), html);
-    await writeFile(join(parsedDir, `${page}.json`), `${JSON.stringify(parsed, null, 2)}\n`);
-    await writeFile(join(expectedDir, `${page}.json`), `${JSON.stringify({ ...expected, error: sanitizeRouterText(message) }, null, 2)}\n`);
+    await writeFixtureSet(page, html, parsed, { ...expected, error: sanitizeRouterText(message) });
   }
 }
 
@@ -138,6 +139,12 @@ function expectedFor(page: string, parsed: ParsedPage, pageLoads: boolean): Expe
   };
 }
 
+async function writeFixtureSet(page: string, html: string, parsed: ParsedPage, expected: ExpectedFixture & { error?: string }): Promise<void> {
+  await writeFile(join(htmlDir, `${page}.html`), `${html.trimEnd()}\n`);
+  await writeFile(join(parsedDir, `${page}.json`), `${JSON.stringify(parsed, null, 2)}\n`);
+  await writeFile(join(expectedDir, `${page}.json`), `${JSON.stringify(expected, null, 2)}\n`);
+}
+
 function isJunkOnly(parsed: ParsedPage): boolean {
   const title = parsed.title || parsed.heading;
   if (/^Login$/i.test(title)) return true;
@@ -159,8 +166,4 @@ function containsSensitiveFixtureValue(value: string): boolean {
   return /65454<98@1/i.test(value)
     || /\b[a-f0-9]{32}\b/i.test(value)
     || /\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/i.test(value);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

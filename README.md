@@ -13,6 +13,7 @@ bun install
 ```bash
 bun run src/cli.ts check
 bun run src/cli.ts coverage
+bun run src/cli.ts sweep --pages diag,dhcpserver --json
 bun run src/cli.ts audit
 bun run src/cli.ts tabs
 bun run src/cli.ts section Diagnostics
@@ -42,9 +43,10 @@ printf '<access-code>' | bun run src/cli.ts wifi --access-code-stdin
 | `action <name>` | Dry-run a guarded router action. Requires `--commit --confirm TOKEN` to POST. |
 | `section <section>` | Print mapped tabs for one router section. |
 | `coverage` | Compare the CLI tab map against the live router sitemap. |
-| `scan` | Safely fetch every mapped router page and print parse counts/status. |
-| `schema` | Fetch every mapped page and include parsed fields/forms/buttons in JSON. |
-| `audit` / `readiness` | Safely fetch every mapped page, keep going through hangs, and summarize failed/fallback/empty/useful pages. |
+| `sweep` | Shared traversal command for mapped router pages. Default output is compact status/count metadata. |
+| `scan` | Compatibility alias for compact sweep metadata. |
+| `schema` | Sweep with parsed/form detail enabled. |
+| `audit` / `readiness` | Sweep-backed health check that keeps going through hangs and summarizes failed/fallback/empty/useful pages. |
 | `sitemap` | Print the live router sitemap. |
 | `page <page-or-tab>` | Fetch and parse any mapped tab or raw CGI page ID. |
 | `inspect <page-or-tab>` | Fetch a page and include parsed form fields/selects. |
@@ -131,6 +133,29 @@ Several configuration pages have page-specific summaries built from current form
 
 Pages on this router can hang. Normal parsed page commands report a structured page-unavailable result instead of taking down broader workflows. `scan`, `schema`, and `audit` continue across failures so one broken AT&T page does not hide the rest of the router.
 
+## Sweep
+
+`sweep` is the shared traversal spine used by `scan`, `schema`, `audit`/`readiness`, and fixture capture. It uses one client/session, walks mapped pages in router-tab order, keeps going through per-page failures, and reports compact counts by default.
+
+```bash
+bun run src/cli.ts sweep
+bun run src/cli.ts sweep --json
+bun run src/cli.ts sweep --pages diag,wconfig_unified,dhcpserver --json
+bun run src/cli.ts sweep --include-parsed --json
+bun run src/cli.ts sweep --forms --json
+bun run src/cli.ts sweep --out router-dumps/latest
+```
+
+Default sweep output does not dump raw HTML or full parsed payloads. Use:
+
+- `--include-parsed` for parsed values, tables, fields, selects, textareas, buttons, forms, fallback sections, and device-list fallback data in JSON.
+- `--forms` for detailed controls, buttons, forms, and submit targets.
+- `--pages <csv>` to limit traversal.
+- `--raw --pages <single-page>` to emit one raw HTML page.
+- `--out <dir>` to write raw HTML and parsed JSON artifacts to disk while keeping stdout compact.
+
+`scan` is retained as the compatibility command for compact sweep metadata. `schema` is sweep with parsed/form detail. `audit` and `readiness` are sweep plus the health/usefulness summary.
+
 `device status` first tries `home.ha`. If that page hangs, it falls back to a concise summary from System Information, Broadband Status, and Firewall Status. Use the section-specific commands for deeper output such as `broadband fiber-status` or `home-network status`.
 
 `devices` first tries `devices.ha`. If that page hangs, it falls back to `ipalloc.ha` and returns degraded device records with IP, name, MAC, status, and allocation.
@@ -139,7 +164,22 @@ Pages on this router can hang. Normal parsed page commands report a structured p
 
 `firewall security-options` first tries `securityoptions.ha`. On firmware that advertises that page but returns Page not found, it falls back to Firewall Status and Firewall Advanced.
 
-The router can also refuse login when its tiny web session pool is full. The CLI reports that as a per-page audit failure instead of aborting the full audit. Avoid running multiple protected CLI commands in parallel; wait for the router's web sessions to timeout before retrying protected pages.
+The router can also refuse login when its tiny web session pool is full. By default the CLI fails fast with a clear error so normal commands do not appear hung. To wait only for that exact condition:
+
+```bash
+printf '<access-code>' | bun run src/cli.ts sweep --wait-for-session --access-code-stdin
+printf '<access-code>' | bun run src/cli.ts sweep --wait-for-session --session-wait-timeout 120000 --session-wait-interval 10000 --access-code-stdin
+```
+
+Environment equivalents:
+
+```bash
+BGW_WAIT_FOR_SESSION=1
+BGW_SESSION_WAIT_TIMEOUT_MS=120000
+BGW_SESSION_WAIT_INTERVAL_MS=10000
+```
+
+Waiting does not retry bad access codes, random connection failures, or parser failures.
 
 ## Router Fixture Pack
 
@@ -159,7 +199,7 @@ Capture sanitized fixtures from the real router with:
 BGW_ACCESS_CODE='<access-code>' bun run fixtures:capture
 ```
 
-The capture is sequential and read-only: it performs GET requests plus the login POST required by the router. It redacts access-code-adjacent fields, hashes, MAC addresses, and IP addresses before writing fixtures.
+The capture is sweep-backed, sequential, and read-only: it performs GET requests plus the login POST required by the router. It redacts access-code-adjacent fields, hashes, MAC addresses, and IP addresses before writing fixtures.
 
 `tests/router-fixtures.test.ts` verifies that a complete fixture pack covers every mapped page, that parsing the saved HTML exactly matches the saved parsed JSON, and that each expected file records whether data, useful fields/tables, buttons/forms, redaction, and non-junk parsing are present.
 

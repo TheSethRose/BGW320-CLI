@@ -8,6 +8,9 @@ export type GlobalOptions = {
   includeSecrets: boolean;
   timeoutMs: number;
   insecureTls: boolean;
+  waitForSession: boolean;
+  sessionWaitTimeoutMs: number;
+  sessionWaitIntervalMs: number;
 };
 
 export async function resolveAccessCode(options: GlobalOptions): Promise<string | undefined> {
@@ -30,5 +33,8 @@ export function envDefaultOptions(): GlobalOptions {
     includeSecrets: false,
     timeoutMs: Number(process.env.BGW_TIMEOUT_MS || 15000),
     insecureTls: process.env.BGW_INSECURE_TLS !== "0",
+    waitForSession: process.env.BGW_WAIT_FOR_SESSION === "1",
+    sessionWaitTimeoutMs: Number(process.env.BGW_SESSION_WAIT_TIMEOUT_MS || 120000),
+    sessionWaitIntervalMs: Number(process.env.BGW_SESSION_WAIT_INTERVAL_MS || 10000),
   };
 }

@@ -21,7 +21,8 @@ bun run build && bun test  # Full CI pipeline
 |------|----------|
 | `src/cli.ts` | Main entry point, argument parsing, command routing |
 | `src/client.ts` | HTTP client, router authentication, session management |
-| `src/scan.ts` | Page discovery and HTML parsing |
+| `src/sweep.ts` | Shared traversal spine for sweep/scan/schema/audit and fixture capture |
+| `src/scan.ts` | Compatibility wrapper around sweep metadata |
 | `src/parser.ts` | HTML parsing utilities for forms, fields, buttons |
 | `src/mutations.ts` | Build mutation plans from form state |
 | `src/operations.ts` | Generate operation results (dry-run/committed) |
@@ -195,6 +196,9 @@ BGW_HOST=192.168.1.254
 BGW_ACCESS_CODE=1234
 BGW_TIMEOUT_MS=15000
 BGW_INSECURE_TLS=0
+BGW_WAIT_FOR_SESSION=1
+BGW_SESSION_WAIT_TIMEOUT_MS=120000
+BGW_SESSION_WAIT_INTERVAL_MS=10000
 ```
 
 ## File Structure

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Home Network Management"
+  short_description: "Inspect and manage BGW320 router state safely"
+  default_prompt: "Use $home-network-management to inspect a BGW320 home network safely with the local CLI."

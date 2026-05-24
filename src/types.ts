@@ -6,6 +6,10 @@ export type RouterClientOptions = {
   timeoutMs: number;
   insecureTls: boolean;
   userAgent: string;
+  waitForSession?: boolean | undefined;
+  sessionWaitTimeoutMs?: number | undefined;
+  sessionWaitIntervalMs?: number | undefined;
+  onSessionWait?: ((event: { waitedMs: number; retryCount: number; timeoutMs: number; intervalMs: number }) => void) | undefined;
 };
 
 export type HttpMethod = "GET" | "POST";

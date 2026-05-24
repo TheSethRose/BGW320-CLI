@@ -6,6 +6,18 @@ import { looksLikeLogin } from "./parser.js";
 export class RouterError extends Error {}
 export class RouterAuthError extends RouterError {}
 export class RouterConnectionError extends RouterError {}
+export class RouterSessionPoolFullError extends RouterAuthError {
+  readonly sessionPoolFull = true;
+  readonly waitedMs: number;
+  readonly retryCount: number;
+
+  constructor(message = "Router web session pool is full.", options: { waitedMs?: number; retryCount?: number } = {}) {
+    super(message);
+    this.name = "RouterSessionPoolFullError";
+    this.waitedMs = options.waitedMs ?? 0;
+    this.retryCount = options.retryCount ?? 0;
+  }
+}
 
 type RequestOptions = {
   method?: HttpMethod;
@@ -79,20 +91,22 @@ export class BGW320Client {
 
     let nonce: string | undefined = initialLoginHtml ? extractNonce(initialLoginHtml) : undefined;
     if (!nonce && initialLoginHtml && routerSessionsFull(initialLoginHtml)) {
-      throw new RouterAuthError("Router reports all web server sessions are in use. Wait for a router web session to timeout, then retry.");
+      nonce = await this.waitForSessionNonce();
     }
     for (let attempt = 0; attempt < 8 && !nonce; attempt += 1) {
       if (attempt > 1) this.cookies.clear();
       let loginPage = await this.request("/cgi-bin/login.ha", { method: "GET" });
       if (routerSessionsFull(loginPage.body)) {
-        throw new RouterAuthError("Router reports all web server sessions are in use. Wait for a router web session to timeout, then retry.");
+        nonce = await this.waitForSessionNonce();
+        break;
       }
       nonce = extractNonce(loginPage.body);
       if (!nonce) {
         await sleep(150 + attempt * 100);
         loginPage = await this.request("/cgi-bin/login.ha", { method: "GET" });
         if (routerSessionsFull(loginPage.body)) {
-          throw new RouterAuthError("Router reports all web server sessions are in use. Wait for a router web session to timeout, then retry.");
+          nonce = await this.waitForSessionNonce();
+          break;
         }
         nonce = extractNonce(loginPage.body);
       }
@@ -131,6 +145,33 @@ export class BGW320Client {
     }
 
     this.authenticated = true;
+  }
+
+  private async waitForSessionNonce(): Promise<string | undefined> {
+    if (this.options.waitForSession !== true) {
+      throw new RouterSessionPoolFullError();
+    }
+
+    const timeoutMs = Math.max(0, this.options.sessionWaitTimeoutMs ?? 120000);
+    const intervalMs = Math.max(1, this.options.sessionWaitIntervalMs ?? 10000);
+    const start = Date.now();
+    let retryCount = 0;
+    let waitedMs = 0;
+
+    while (waitedMs < timeoutMs) {
+      this.options.onSessionWait?.({ waitedMs, retryCount, timeoutMs, intervalMs });
+      await sleep(Math.min(intervalMs, Math.max(0, timeoutMs - waitedMs)));
+      retryCount += 1;
+      waitedMs = Date.now() - start;
+      const loginPage = await this.request("/cgi-bin/login.ha", { method: "GET" });
+      if (routerSessionsFull(loginPage.body)) continue;
+      return extractNonce(loginPage.body);
+    }
+
+    throw new RouterSessionPoolFullError("Router web session pool is full.", {
+      waitedMs: timeoutMs,
+      retryCount,
+    });
   }
 
   private async request(path: string, options: RequestOptions): Promise<HttpResponse> {

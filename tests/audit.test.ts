@@ -6,7 +6,7 @@ import { fetchSecurityOptions } from "../src/status.js";
 
 test("buildAudit classifies failed, fallback, useful, and empty pages", () => {
   const scans: PageScan[] = [
-    {
+    scan({
       section: "Device",
       label: "Status",
       page: "home",
@@ -14,23 +14,23 @@ test("buildAudit classifies failed, fallback, useful, and empty pages", () => {
       ok: true,
       fallback: true,
       dataCount: 12,
-    },
-    {
+    }),
+    scan({
       section: "Diagnostics",
       label: "Update",
       page: "update",
       dangerous: true,
       ok: true,
       dataCount: 0,
-    },
-    {
+    }),
+    scan({
       section: "Voice",
       label: "Call Statistics",
       page: "voicestat",
       dangerous: false,
       ok: false,
       error: "Timed out",
-    },
+    }),
   ];
 
   expect(buildAudit(scans)).toMatchObject({
@@ -43,6 +43,30 @@ test("buildAudit classifies failed, fallback, useful, and empty pages", () => {
     dangerousPages: 1,
   });
 });
+
+function scan(overrides: Partial<PageScan>): PageScan {
+  const dataCount = overrides.dataCount ?? 0;
+  return {
+    section: "Device",
+    label: "Status",
+    page: "home",
+    dangerous: false,
+    guarded: false,
+    ok: false,
+    valueCount: 0,
+    tableRows: 0,
+    fieldCount: 0,
+    selectCount: 0,
+    textareaCount: 0,
+    buttonCount: 0,
+    formCount: 0,
+    dataCount,
+    dataObtainable: dataCount > 0,
+    useful: overrides.ok === true && dataCount > 0,
+    notOnlyJunk: overrides.ok === true && dataCount > 0,
+    ...overrides,
+  };
+}
 
 test("fetchSecurityOptions falls back when firmware advertises a missing page", async () => {
   const client = {

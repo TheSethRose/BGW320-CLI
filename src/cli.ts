@@ -1,11 +1,10 @@
 #!/usr/bin/env bun
-import { BGW320Client, RouterAuthError, RouterConnectionError } from "./client.js";
+import { BGW320Client, RouterAuthError, RouterConnectionError, RouterSessionPoolFullError } from "./client.js";
 import { envDefaultOptions, resolveAccessCode, type GlobalOptions } from "./config.js";
 import { parsedPageOutput, printAudit, printCompositeStatus, printDeviceList, printDeviceStatus, printJson, printKeyValues, printLogs, printOperation, printPageFetchError, printParsedPage, printScans, printSitemap } from "./format.js";
 import { parseLogs, parsePage, parseSitemap } from "./parser.js";
 import { buildMutationPlan, buildSubmitPlan, confirmTokenForPage, dangerousPages, guardedMutationPages } from "./mutations.js";
 import { listSections, resolvePage, resolveSectionCommand, routerTabs, tabsForSection } from "./pages.js";
-import { scanRouter } from "./scan.js";
 import { displayActionPayload, getAction, routerActions } from "./actions.js";
 import { buildDiagnosticPlan, diagnosticButton, extractDiagnosticResult, isDiagnosticKind } from "./diagnostics.js";
 import { fetchParsedPage } from "./fetch.js";
@@ -13,6 +12,7 @@ import { fetchDeviceStatus, fetchHomeNetworkStatus, fetchSecurityOptions, fetchS
 import { buildAudit } from "./audit.js";
 import { fetchDeviceList } from "./devices.js";
 import { actionCommitted, actionDryRun, diagnosticCommitted, diagnosticDryRun, setCommitted, setDryRun, submitCommitted, submitDryRun } from "./operations.js";
+import { stripLargePayloads, sweepRouter, writeSweepArtifacts, type SweepPage } from "./sweep.js";
 
 type Command = {
   name: string;
@@ -27,6 +27,9 @@ type Command = {
     protocol: "IPv4" | "IPv6" | undefined;
     delayMs: number;
     limit: number;
+    includeParsed: boolean;
+    pages: string[] | undefined;
+    outDir: string | undefined;
   };
 };
 
@@ -45,6 +48,13 @@ async function main(argv: string[]): Promise<void> {
     timeoutMs: command.options.timeoutMs,
     insecureTls: command.options.insecureTls,
     userAgent: "bgw320-cli/0.1.0",
+    waitForSession: command.options.waitForSession,
+    sessionWaitTimeoutMs: command.options.sessionWaitTimeoutMs,
+    sessionWaitIntervalMs: command.options.sessionWaitIntervalMs,
+    onSessionWait: command.options.json ? undefined : (event) => {
+      const totalRetries = Math.max(1, Math.ceil(event.timeoutMs / Math.max(1, event.intervalMs)));
+      process.stderr.write(`Router web session pool is full; waiting ${event.intervalMs}ms before retry ${event.retryCount + 1} of approximately ${totalRetries}.\n`);
+    },
   });
 
   switch (command.name) {
@@ -129,22 +139,18 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
 
+    case "sweep":
     case "scan":
     case "schema": {
-      const scans = await scanRouter(client, {
-        delayMs: command.options.delayMs,
-        includeParsed: command.name === "schema" || command.options.full,
-      });
+      const scans = await runSweepCommand(client, command);
+      if (command.options.raw && !command.options.outDir && !command.options.json) return;
       output(command, scans, () => printScans(scans));
       return;
     }
 
     case "audit":
     case "readiness": {
-      const scans = await scanRouter(client, {
-        delayMs: command.options.delayMs,
-        includeParsed: false,
-      });
+      const scans = await runSweepCommand(client, command, { forceCompact: true });
       const audit = buildAudit(scans);
       output(command, audit, () => printAudit(audit));
       return;
@@ -377,6 +383,38 @@ async function printPageCommand(client: BGW320Client, command: Command, page: st
   output(command, parsedPageOutput(result.parsed), () => printParsedPage(result.parsed!, { forms: options.forms, limit: command.options.limit }));
 }
 
+async function runSweepCommand(client: BGW320Client, command: Command, options: { forceCompact?: boolean } = {}): Promise<SweepPage[]> {
+  const limitedPages = command.options.pages;
+  if (command.options.raw && !command.options.outDir && (!limitedPages || limitedPages.length !== 1)) {
+    throw new Error("Refusing to emit raw HTML for a full sweep. Use --pages <page> with exactly one page, or use --out <dir>.");
+  }
+
+  const writeArtifacts = command.options.outDir !== undefined;
+  const includeParsed = !options.forceCompact && (command.options.includeParsed || command.options.full || command.name === "schema" || writeArtifacts);
+  const includeForms = !options.forceCompact && (command.options.forms || command.name === "schema");
+  const includeRaw = !options.forceCompact && (command.options.raw || writeArtifacts);
+  const pages = await sweepRouter(client, {
+    delayMs: command.options.delayMs,
+    pages: limitedPages,
+    includeParsed,
+    includeForms,
+    includeRaw,
+    includeSecrets: command.options.includeSecrets,
+    useFallbacks: !includeRaw,
+  });
+
+  if (command.options.raw && !writeArtifacts && !command.options.json) {
+    process.stdout.write(pages[0]?.rawHtml ?? "");
+    return [];
+  }
+
+  if (writeArtifacts) {
+    return writeSweepArtifacts(pages, command.options.outDir!);
+  }
+
+  return includeParsed || includeForms || includeRaw ? pages : pages.map(stripLargePayloads);
+}
+
 async function fetchRawPage(client: BGW320Client, command: Command, page: string): Promise<{ body: string } | undefined> {
   try {
     return await client.getCgiPage(page);
@@ -405,6 +443,9 @@ function parseArgs(argv: string[]): Command {
     protocol: undefined as "IPv4" | "IPv6" | undefined,
     delayMs: 150,
     limit: 20,
+    includeParsed: false,
+    pages: undefined as string[] | undefined,
+    outDir: undefined as string | undefined,
   };
 
   const positional: string[] = [];
@@ -454,11 +495,29 @@ function parseArgs(argv: string[]): Command {
       case "--full":
         options.full = true;
         break;
+      case "--include-parsed":
+        options.includeParsed = true;
+        break;
+      case "--pages":
+        options.pages = requireValue(argv, ++i, "--pages").split(",").map((page) => page.trim()).filter(Boolean);
+        break;
+      case "--out":
+        options.outDir = requireValue(argv, ++i, "--out");
+        break;
       case "--delay":
         options.delayMs = Number(requireValue(argv, ++i, "--delay"));
         break;
       case "--limit":
         options.limit = Number(requireValue(argv, ++i, "--limit"));
+        break;
+      case "--wait-for-session":
+        options.waitForSession = true;
+        break;
+      case "--session-wait-timeout":
+        options.sessionWaitTimeoutMs = Number(requireValue(argv, ++i, "--session-wait-timeout"));
+        break;
+      case "--session-wait-interval":
+        options.sessionWaitIntervalMs = Number(requireValue(argv, ++i, "--session-wait-interval"));
         break;
       default:
         positional.push(arg);
@@ -533,9 +592,20 @@ Generic inspection:
   bgw tabs | section <section> | sitemap | coverage
     Show the local tab map, one section, live sitemap, or sitemap-vs-CLI coverage.
 
+  bgw sweep [--json] [--pages diag,dhcpserver] [--include-parsed] [--forms] [--out router-dumps/latest]
+    Shared traversal command for every mapped tab. Default output is compact
+    status/count metadata. Full parsed payloads, form details, raw HTML, and
+    artifact writing are opt-in.
+
+  bgw scan [--json]
+    Compatibility alias for compact sweep metadata.
+
+  bgw schema [--json]
+    Sweep with parsed/form detail enabled.
+
   bgw audit [--json] [--delay 150]
-    Read-only health check across every mapped tab. Keeps going through hangs and
-    reports failed/fallback/empty/useful pages.
+    Sweep-backed health check across every mapped tab. Keeps going through hangs
+    and reports failed/fallback/empty/useful pages.
 
 Operations are dry-run by default:
   bgw actions
@@ -573,15 +643,23 @@ Global options:
   --access-code-stdin       Read the device access code from stdin
   --json                    Print script-friendly JSON
   --include-secrets         Include sensitive local output instead of redacting it
+  --include-parsed          Include full parsed page data in sweep/schema JSON
+  --pages <csv>             Limit sweep/scan/schema/audit traversal to selected pages
+  --out <dir>               Write sweep raw HTML and parsed JSON artifacts to disk
   --timeout <ms>            Request timeout. Default: 15000
   --delay <ms>              Delay between audit/scan requests. Default: 150
   --limit <n>               Limit displayed rows. Default: 20
+  --wait-for-session        Wait/retry when the router says all web sessions are in use
+  --session-wait-timeout <ms>   Wait timeout. Default: 120000
+  --session-wait-interval <ms>  Wait poll interval. Default: 10000
   --confirm <token>         Required token for committed guarded operations
   --strict-tls              Enforce TLS validation. Usually fails on the router cert.
 
 Notes:
   Read commands only perform GET requests plus the login POST required by the router.
   The router web UI is flaky. Fallbacks are intentionally narrow so normal commands stay fast.
+  Session-pool waiting is opt-in so basic commands do not appear hung. Env:
+  BGW_WAIT_FOR_SESSION=1, BGW_SESSION_WAIT_TIMEOUT_MS, BGW_SESSION_WAIT_INTERVAL_MS.
   JSON dry-runs include operation, dryRun, committed, page, guarded, dangerous,
   confirmation, commitCommand, payload, and changes/result fields where applicable.
 
@@ -599,6 +677,21 @@ function printTabs(tabs: typeof routerTabs): void {
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
+  if (error instanceof RouterSessionPoolFullError) {
+    if (process.argv.slice(2).includes("--json")) {
+      printJson({
+        ok: false,
+        page: "login",
+        error: "Router web session pool is full.",
+        sessionPoolFull: true,
+        waitedMs: error.waitedMs,
+        retryCount: error.retryCount,
+      });
+    } else {
+      process.stderr.write(`${error.message}\n`);
+    }
+    process.exit(2);
+  }
   if (error instanceof RouterAuthError || error instanceof RouterConnectionError) {
     process.stderr.write(`${error.message}\n`);
     process.exit(2);
