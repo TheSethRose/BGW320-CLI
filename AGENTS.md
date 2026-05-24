@@ -7,10 +7,13 @@
 ## Build & Test Commands
 
 ```bash
-bun run build          # TypeScript compilation
 bun run typecheck      # TypeScript type checking
 bun test               # Run tests (bun:test)
-bun run build && bun test  # Full CI pipeline
+bun run lint           # ESLint for TypeScript/JS
+bun run deadcode       # Knip unused files/dependencies/exports check
+bun run unused-exports # ts-prune export inspection
+bun run exports        # publint package publish sanity
+bun run doctor         # Full local health check: typecheck, tests, lint, knip, publint
 ```
 
 ## Architecture

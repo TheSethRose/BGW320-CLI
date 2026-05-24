@@ -81,7 +81,7 @@ export function buildSubmitPlan(page: string, parsed: ParsedPage, buttonName: st
   };
 }
 
-export function findButton(parsed: ParsedPage, buttonName: string): ParsedButton | undefined {
+function findButton(parsed: ParsedPage, buttonName: string): ParsedButton | undefined {
   const target = normalize(buttonName);
   return parsed.buttons.find((button) => {
     return [button.name, button.value, button.label].some((candidate) => normalize(candidate) === target);

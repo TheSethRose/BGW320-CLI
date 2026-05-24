@@ -3,7 +3,7 @@ import { URL, URLSearchParams } from "node:url";
 import type { HttpMethod, HttpResponse, RouterClientOptions } from "./types.js";
 import { looksLikeLogin } from "./parser.js";
 
-export class RouterError extends Error {}
+class RouterError extends Error {}
 export class RouterAuthError extends RouterError {}
 export class RouterConnectionError extends RouterError {}
 export class RouterSessionPoolFullError extends RouterAuthError {

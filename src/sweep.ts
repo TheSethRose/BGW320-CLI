@@ -8,7 +8,7 @@ import { resolvePage, routerTabs, type RouterTab } from "./pages.js";
 import { fetchDeviceStatus, fetchHomeNetworkStatus, fetchSecurityOptions, type StatusSection } from "./status.js";
 import type { Device, ParsedButton, ParsedField, ParsedForm, ParsedPage, ParsedSelect, ParsedTextarea } from "./types.js";
 
-export type SweepControlDetails = {
+type SweepControlDetails = {
   fields: ParsedField[];
   selects: ParsedSelect[];
   textareas: ParsedTextarea[];
@@ -53,7 +53,7 @@ export type SweepPage = {
   };
 };
 
-export type SweepOptions = {
+type SweepOptions = {
   delayMs: number;
   pages?: string[] | undefined;
   includeParsed?: boolean | undefined;

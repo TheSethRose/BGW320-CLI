@@ -2,7 +2,7 @@ import type { RouterAction } from "./actions.js";
 import type { DiagnosticKind } from "./diagnostics.js";
 import type { MutationPlan } from "./mutations.js";
 
-export type OperationKind = "action" | "set" | "submit" | "diagnostic";
+type OperationKind = "action" | "set" | "submit" | "diagnostic";
 
 export type OperationResult = {
   operation: OperationKind;

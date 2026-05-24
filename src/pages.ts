@@ -1,4 +1,4 @@
-export type RouterSectionName =
+type RouterSectionName =
   | "Device"
   | "Broadband"
   | "Home Network"
@@ -67,7 +67,7 @@ export function tabsForSection(section: string): RouterTab[] {
   return routerTabs.filter((tab) => normalize(tab.section) === key);
 }
 
-export function resolveTab(input: string): RouterTab | undefined {
+function resolveTab(input: string): RouterTab | undefined {
   const normalized = normalize(input);
   return routerTabs.find((tab) => {
     const candidates = [
@@ -104,7 +104,7 @@ export function resolveSectionCommand(root: string, args: string[]): RouterTab |
   });
 }
 
-export function normalize(value: string): string {
+function normalize(value: string): string {
   return value.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "");
 }
 

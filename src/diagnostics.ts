@@ -3,15 +3,6 @@ import { buildSubmitPlan, type MutationPlan } from "./mutations.js";
 
 export type DiagnosticKind = "ping" | "traceroute" | "nslookup";
 
-export type DiagnosticPlan = {
-  kind: DiagnosticKind;
-  target: string;
-  dryRun: boolean;
-  page: string;
-  payload: Record<string, string>;
-  button: string;
-};
-
 const diagnosticButtons: Record<DiagnosticKind, string> = {
   ping: "Ping",
   traceroute: "Trace",

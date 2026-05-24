@@ -1,6 +1,6 @@
 import type { PageScan } from "./scan.js";
 
-export type AuditPage = PageScan & {
+type AuditPage = PageScan & {
   useful: boolean;
 };
 

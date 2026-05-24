@@ -8,6 +8,20 @@ TypeScript/Bun CLI for the AT&T BGW320 gateway at `192.168.1.254`.
 bun install
 ```
 
+## Quality Checks
+
+```bash
+bun run typecheck
+bun test
+bun run lint
+bun run deadcode
+bun run unused-exports
+bun run exports
+bun run doctor
+```
+
+`doctor` is the default one-command local health check for this CLI. It runs typecheck, tests, ESLint, Knip, and publint.
+
 ## Usage
 
 ```bash

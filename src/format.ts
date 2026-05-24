@@ -7,7 +7,7 @@ import type { DeviceListResult } from "./devices.js";
 import { confirmTokenForPage, dangerousPages } from "./mutations.js";
 import type { OperationResult } from "./operations.js";
 
-export type ParsedPageOutput = ParsedPage & {
+type ParsedPageOutput = ParsedPage & {
   summary: Record<string, string>;
 };
 
@@ -37,7 +37,7 @@ export function printSitemap(entries: SitemapEntry[]): void {
   }
 }
 
-export function printDevices(devices: Device[], options: { limit?: number } = {}): void {
+function printDevices(devices: Device[], options: { limit?: number } = {}): void {
   const limit = options.limit ?? 20;
   if (devices.length > 0) {
     const byStatus = countBy(devices.map((device) => ({ Status: device.status || "(blank)" })), "Status");
@@ -240,7 +240,7 @@ export function printParsedPage(page: ParsedPage, options: { forms?: boolean; li
   }
 }
 
-export function summarizeParsedPage(page: ParsedPage): Record<string, string> {
+function summarizeParsedPage(page: ParsedPage): Record<string, string> {
   switch (page.page) {
     case "ipalloc":
       return {
@@ -296,7 +296,7 @@ export function summarizeParsedPage(page: ParsedPage): Record<string, string> {
   }
 }
 
-export function printRows(rows: Record<string, string>[], columns: string[]): void {
+function printRows(rows: Record<string, string>[], columns: string[]): void {
   if (rows.length === 0) {
     process.stdout.write("(none)\n");
     return;

@@ -1,5 +1,3 @@
-export type OutputFormat = "table" | "json";
-
 export type RouterClientOptions = {
   host: string;
   accessCode?: string | undefined;

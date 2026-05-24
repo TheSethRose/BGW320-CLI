@@ -7,7 +7,7 @@ const entityMap: Record<string, string> = {
   nbsp: " ",
 };
 
-export function decodeEntities(value: string): string {
+function decodeEntities(value: string): string {
   return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_full, entity: string) => {
     const lower = entity.toLowerCase();
     if (lower.startsWith("#x")) {
@@ -48,7 +48,7 @@ export function getAttrs(tag: string): Record<string, string> {
   return attrs;
 }
 
-export function extractRows(html: string): string[][] {
+function extractRows(html: string): string[][] {
   const rows: string[][] = [];
   for (const rowMatch of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
     const row = rowMatch[1] ?? "";
