@@ -9,15 +9,15 @@ Read-only first. Dry-run second. Commit only after the user approves the exact c
 These should not change router config:
 
 ```bash
-bun run src/cli.ts device status --json
-bun run src/cli.ts devices --all --json
-bun run src/cli.ts broadband status --json
-bun run src/cli.ts broadband fiber-status --json
-bun run src/cli.ts home-network status --json
-bun run src/cli.ts firewall status --json
-bun run src/cli.ts diagnostics logs --json
-bun run src/cli.ts sweep --json --delay 300
-bun run src/cli.ts audit --json --delay 300
+bgw device status --json
+bgw devices --all --json
+bgw broadband status --json
+bgw broadband fiber-status --json
+bgw home-network status --json
+bgw firewall status --json
+bgw diagnostics logs --json
+bgw sweep --json --delay 300
+bgw audit --json --delay 300
 ```
 
 ## Sensitive Output Controls
@@ -62,9 +62,9 @@ Required sequence:
 Never run these without explicit approval:
 
 ```bash
-bun run src/cli.ts action restart --commit --confirm RESTART
-bun run src/cli.ts action reset-connection --commit --confirm RESET-CONNECTION
-bun run src/cli.ts action factory-reset --commit --confirm FACTORY-RESET
-bun run src/cli.ts set <page> KEY=VALUE --commit --confirm <TOKEN>
-bun run src/cli.ts submit <page> <button> KEY=VALUE --commit --confirm <TOKEN>
+bgw action restart --commit --confirm RESTART
+bgw action reset-connection --commit --confirm RESET-CONNECTION
+bgw action factory-reset --commit --confirm FACTORY-RESET
+bgw set <page> KEY=VALUE --commit --confirm <TOKEN>
+bgw submit <page> <button> KEY=VALUE --commit --confirm <TOKEN>
 ```

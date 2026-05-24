@@ -1,4 +1,4 @@
-# bgw320-cli
+# bgw
 
 TypeScript/Bun CLI for the AT&T BGW320 gateway at `192.168.1.254`.
 
@@ -7,6 +7,40 @@ TypeScript/Bun CLI for the AT&T BGW320 gateway at `192.168.1.254`.
 ```bash
 bun install
 ```
+
+## Global Install
+
+This package exposes the `bgw` executable:
+
+```bash
+bgw --help
+```
+
+For local development from this checkout:
+
+```bash
+bun link
+bgw --help
+```
+
+If you previously linked the old package name, remove it first:
+
+```bash
+bun unlink bgw320-cli
+bun link
+```
+
+After publishing to a registry, install globally with Bun:
+
+```bash
+bun add -g bgw
+```
+
+The CLI depends on Bun because the executable points at TypeScript source with a Bun shebang.
+
+## Agent Skill
+
+This repo includes a Codex/OpenAI skill in [`skill/SKILL.md`](skill/SKILL.md). When using an agent that supports local skills, point it at the `skill/` folder so it can use the bundled safety model, command map, and inspection notes for `bgw`.
 
 ## Quality Checks
 
@@ -25,23 +59,23 @@ bun run doctor
 ## Usage
 
 ```bash
-bun run src/cli.ts check
-bun run src/cli.ts coverage
-bun run src/cli.ts sweep --pages diag,dhcpserver --json
-bun run src/cli.ts audit
-bun run src/cli.ts tabs
-bun run src/cli.ts section Diagnostics
-bun run src/cli.ts broadband fiber-status
-bun run src/cli.ts home-network wi-fi --json
-bun run src/cli.ts firewall nat-gaming
-bun run src/cli.ts diagnostics logs --limit 50
+bgw check
+bgw coverage
+bgw sweep --pages diag,dhcpserver --json
+bgw audit
+bgw tabs
+bgw section Diagnostics
+bgw broadband fiber-status
+bgw home-network wi-fi --json
+bgw firewall nat-gaming
+bgw diagnostics logs --limit 50
 ```
 
 Authenticated pages require the device access code. Prefer stdin so the code is not stored in shell history:
 
 ```bash
-printf '<access-code>' | bun run src/cli.ts auth --access-code-stdin
-printf '<access-code>' | bun run src/cli.ts wifi --access-code-stdin
+printf '<access-code>' | bgw auth --access-code-stdin
+printf '<access-code>' | bgw wifi --access-code-stdin
 ```
 
 `BGW_ACCESS_CODE` is also supported for automation.
@@ -77,50 +111,50 @@ printf '<access-code>' | bun run src/cli.ts wifi --access-code-stdin
 All of these commands accept `--json`. Parsed page JSON includes a `summary` object with the same high-value fields used by the terminal view, plus the underlying values, tables, controls, buttons, and forms. Use `--forms` to include form controls in normal terminal output.
 
 ```bash
-bun run src/cli.ts device status
-bun run src/cli.ts device device-list
-bun run src/cli.ts device system-information
-bun run src/cli.ts device access-code
-bun run src/cli.ts device remote-access
-bun run src/cli.ts device restart-device
+bgw device status
+bgw device device-list
+bgw device system-information
+bgw device access-code
+bgw device remote-access
+bgw device restart-device
 
-bun run src/cli.ts broadband status
-bun run src/cli.ts broadband configure
-bun run src/cli.ts broadband fiber-status
+bgw broadband status
+bgw broadband configure
+bgw broadband fiber-status
 
-bun run src/cli.ts home-network status
-bun run src/cli.ts home-network configure
-bun run src/cli.ts home-network ipv6
-bun run src/cli.ts home-network wi-fi
-bun run src/cli.ts home-network mac-filtering
-bun run src/cli.ts home-network subnets-dhcp
-bun run src/cli.ts home-network ip-allocation
+bgw home-network status
+bgw home-network configure
+bgw home-network ipv6
+bgw home-network wi-fi
+bgw home-network mac-filtering
+bgw home-network subnets-dhcp
+bgw home-network ip-allocation
 
-bun run src/cli.ts voice status
-bun run src/cli.ts voice line-details
-bun run src/cli.ts voice call-statistics
+bgw voice status
+bgw voice line-details
+bgw voice call-statistics
 
-bun run src/cli.ts firewall status
-bun run src/cli.ts firewall custom-services
-bun run src/cli.ts firewall packet-filter
-bun run src/cli.ts firewall nat-gaming
-bun run src/cli.ts firewall public-subnet-hosts
-bun run src/cli.ts firewall ip-passthrough
-bun run src/cli.ts firewall firewall-advanced
-bun run src/cli.ts firewall security-options
+bgw firewall status
+bgw firewall custom-services
+bgw firewall packet-filter
+bgw firewall nat-gaming
+bgw firewall public-subnet-hosts
+bgw firewall ip-passthrough
+bgw firewall firewall-advanced
+bgw firewall security-options
 
-bun run src/cli.ts diagnostics troubleshoot
-bun run src/cli.ts diagnostics ping example.com
-bun run src/cli.ts diagnostics ping example.com --commit --confirm DIAG
-bun run src/cli.ts diagnostics traceroute example.com --commit --confirm DIAG
-bun run src/cli.ts diagnostics nslookup example.com --commit --confirm DIAG
-bun run src/cli.ts diagnostics speed-test
-bun run src/cli.ts diagnostics logs
-bun run src/cli.ts diagnostics update
-bun run src/cli.ts diagnostics resets
-bun run src/cli.ts diagnostics syslog
-bun run src/cli.ts diagnostics event-notifications
-bun run src/cli.ts diagnostics nat-table
+bgw diagnostics troubleshoot
+bgw diagnostics ping example.com
+bgw diagnostics ping example.com --commit --confirm DIAG
+bgw diagnostics traceroute example.com --commit --confirm DIAG
+bgw diagnostics nslookup example.com --commit --confirm DIAG
+bgw diagnostics speed-test
+bgw diagnostics logs
+bgw diagnostics update
+bgw diagnostics resets
+bgw diagnostics syslog
+bgw diagnostics event-notifications
+bgw diagnostics nat-table
 ```
 
 ## Generic Inspection And Forms
@@ -128,8 +162,8 @@ bun run src/cli.ts diagnostics nat-table
 Use `inspect` or `--forms` when the router page changed and you need to see what the CLI discovered:
 
 ```bash
-bun run src/cli.ts inspect "Diagnostics/Troubleshoot" --forms
-bun run src/cli.ts home-network wi-fi --forms
+bgw inspect "Diagnostics/Troubleshoot" --forms
+bgw home-network wi-fi --forms
 ```
 
 Readable page output shows available buttons and control counts by default. JSON includes parsed values, tables, fields, selects, textareas, buttons, and forms.
@@ -152,12 +186,12 @@ Pages on this router can hang. Normal parsed page commands report a structured p
 `sweep` is the shared traversal spine used by `scan`, `schema`, `audit`/`readiness`, and fixture capture. It uses one client/session, walks mapped pages in router-tab order, keeps going through per-page failures, and reports compact counts by default.
 
 ```bash
-bun run src/cli.ts sweep
-bun run src/cli.ts sweep --json
-bun run src/cli.ts sweep --pages diag,wconfig_unified,dhcpserver --json
-bun run src/cli.ts sweep --include-parsed --json
-bun run src/cli.ts sweep --forms --json
-bun run src/cli.ts sweep --out router-dumps/latest
+bgw sweep
+bgw sweep --json
+bgw sweep --pages diag,wconfig_unified,dhcpserver --json
+bgw sweep --include-parsed --json
+bgw sweep --forms --json
+bgw sweep --out router-dumps/latest
 ```
 
 Default sweep output does not dump raw HTML or full parsed payloads. Use:
@@ -181,8 +215,8 @@ Default sweep output does not dump raw HTML or full parsed payloads. Use:
 The router can also refuse login when its tiny web session pool is full. By default the CLI fails fast with a clear error so normal commands do not appear hung. To wait only for that exact condition:
 
 ```bash
-printf '<access-code>' | bun run src/cli.ts sweep --wait-for-session --access-code-stdin
-printf '<access-code>' | bun run src/cli.ts sweep --wait-for-session --session-wait-timeout 120000 --session-wait-interval 10000 --access-code-stdin
+printf '<access-code>' | bgw sweep --wait-for-session --access-code-stdin
+printf '<access-code>' | bgw sweep --wait-for-session --session-wait-timeout 120000 --session-wait-interval 10000 --access-code-stdin
 ```
 
 Environment equivalents:
@@ -222,10 +256,10 @@ The capture is sweep-backed, sequential, and read-only: it performs GET requests
 Diagnostic network actions dry-run by default and require `--commit --confirm DIAG` to send the router form:
 
 ```bash
-bun run src/cli.ts diagnostics ping example.com
-bun run src/cli.ts diagnostics ping example.com --commit --confirm DIAG
-bun run src/cli.ts diagnostics traceroute example.com --commit --confirm DIAG
-bun run src/cli.ts diagnostics nslookup example.com --commit --confirm DIAG
+bgw diagnostics ping example.com
+bgw diagnostics ping example.com --commit --confirm DIAG
+bgw diagnostics traceroute example.com --commit --confirm DIAG
+bgw diagnostics nslookup example.com --commit --confirm DIAG
 ```
 
 Use `--ipv4` or `--ipv6` to set the router protocol preference.
@@ -241,8 +275,8 @@ Read commands only send GET requests plus the login POST required for authentica
 `submit` defaults to dry-run. It fetches the page, discovers the requested button, builds the router POST payload from the current form state plus your overrides, and prints the confirmation token:
 
 ```bash
-bun run src/cli.ts submit "Diagnostics/Troubleshoot" Ping Address=example.com
-bun run src/cli.ts submit "Diagnostics/Troubleshoot" Ping Address=example.com --commit --confirm DIAG
+bgw submit "Diagnostics/Troubleshoot" Ping Address=example.com
+bgw submit "Diagnostics/Troubleshoot" Ping Address=example.com --commit --confirm DIAG
 ```
 
 Generic `submit` is blocked on dangerous pages such as restart/reset/update/access-code. Use an explicit supported `action` for those.
@@ -273,24 +307,24 @@ The generic `set` command refuses mutation attempts against dangerous pages:
 Supported explicit actions are guarded separately. Current action commands:
 
 ```bash
-bun run src/cli.ts action restart
-bun run src/cli.ts action clear-device-list
-bun run src/cli.ts action run-speed-test
-bun run src/cli.ts action run-full-diagnostics
-bun run src/cli.ts action send-diagnostics
-bun run src/cli.ts action diagnostics-ethernet-details
-bun run src/cli.ts action diagnostics-authentication-details
-bun run src/cli.ts action diagnostics-ip-details
-bun run src/cli.ts action diagnostics-dns-details
-bun run src/cli.ts action packet-filter-enable
-bun run src/cli.ts action packet-filter-add-drop-rule
-bun run src/cli.ts action packet-filter-add-pass-rule
-bun run src/cli.ts action reset-ip
-bun run src/cli.ts action reset-connection
-bun run src/cli.ts action restart-from-resets
-bun run src/cli.ts action reset-wifi-config
-bun run src/cli.ts action reset-firewall-config
-bun run src/cli.ts action factory-reset
+bgw action restart
+bgw action clear-device-list
+bgw action run-speed-test
+bgw action run-full-diagnostics
+bgw action send-diagnostics
+bgw action diagnostics-ethernet-details
+bgw action diagnostics-authentication-details
+bgw action diagnostics-ip-details
+bgw action diagnostics-dns-details
+bgw action packet-filter-enable
+bgw action packet-filter-add-drop-rule
+bgw action packet-filter-add-pass-rule
+bgw action reset-ip
+bgw action reset-connection
+bgw action restart-from-resets
+bgw action reset-wifi-config
+bgw action reset-firewall-config
+bgw action factory-reset
 ```
 
 Every `action` command is dry-run by default. `actions` prints the confirmation token required to commit each one. Reset/restart/factory-reset actions are marked dangerous and should be treated as destructive router operations.
@@ -304,7 +338,7 @@ Sensitive values are redacted by default. Use `--include-secrets` only when inte
 If a router page hangs or changes, use:
 
 ```bash
-bun run src/cli.ts audit
-bun run src/cli.ts scan --json
-bun run src/cli.ts inspect "Home Network/Wi-Fi" --forms
+bgw audit
+bgw scan --json
+bgw inspect "Home Network/Wi-Fi" --forms
 ```

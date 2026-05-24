@@ -17,49 +17,49 @@
 ## Most-Used Read Commands
 
 ```bash
-bun run src/cli.ts device status --json
-bun run src/cli.ts devices --all --limit 50 --json
-bun run src/cli.ts wifi --forms --json
-bun run src/cli.ts broadband status --json
-bun run src/cli.ts broadband configure --json
-bun run src/cli.ts broadband fiber-status --json
-bun run src/cli.ts home-network status --json
-bun run src/cli.ts home-network configure --json
-bun run src/cli.ts home-network ipv6 --json
-bun run src/cli.ts home-network wi-fi --json
-bun run src/cli.ts home-network mac-filtering --json
-bun run src/cli.ts home-network subnets-dhcp --json
-bun run src/cli.ts home-network ip-allocation --json
-bun run src/cli.ts firewall status --json
-bun run src/cli.ts firewall packet-filter --json
-bun run src/cli.ts firewall nat-gaming --json
-bun run src/cli.ts firewall public-subnet-hosts --json
-bun run src/cli.ts firewall ip-passthrough --json
-bun run src/cli.ts firewall firewall-advanced --json
-bun run src/cli.ts firewall security-options --json
-bun run src/cli.ts diagnostics troubleshoot --json
-bun run src/cli.ts diagnostics speed-test --json
-bun run src/cli.ts diagnostics logs --json
-bun run src/cli.ts diagnostics syslog --json
-bun run src/cli.ts diagnostics event-notifications --json
-bun run src/cli.ts diagnostics nat-table --json
+bgw device status --json
+bgw devices --all --limit 50 --json
+bgw wifi --forms --json
+bgw broadband status --json
+bgw broadband configure --json
+bgw broadband fiber-status --json
+bgw home-network status --json
+bgw home-network configure --json
+bgw home-network ipv6 --json
+bgw home-network wi-fi --json
+bgw home-network mac-filtering --json
+bgw home-network subnets-dhcp --json
+bgw home-network ip-allocation --json
+bgw firewall status --json
+bgw firewall packet-filter --json
+bgw firewall nat-gaming --json
+bgw firewall public-subnet-hosts --json
+bgw firewall ip-passthrough --json
+bgw firewall firewall-advanced --json
+bgw firewall security-options --json
+bgw diagnostics troubleshoot --json
+bgw diagnostics speed-test --json
+bgw diagnostics logs --json
+bgw diagnostics syslog --json
+bgw diagnostics event-notifications --json
+bgw diagnostics nat-table --json
 ```
 
 ## Generic Inspection
 
 ```bash
-bun run src/cli.ts tabs
-bun run src/cli.ts section <section>
-bun run src/cli.ts sitemap
-bun run src/cli.ts coverage
-bun run src/cli.ts sweep --json --delay 300
-bun run src/cli.ts sweep --pages diag,wconfig_unified,dhcpserver --json
-bun run src/cli.ts sweep --include-parsed --json
-bun run src/cli.ts sweep --forms --json
-bun run src/cli.ts sweep --out router-dumps/latest
-bun run src/cli.ts page <page-or-tab> --forms --json
-bun run src/cli.ts page <page-or-tab> --raw
-bun run src/cli.ts inspect <page-or-tab> --json
+bgw tabs
+bgw section <section>
+bgw sitemap
+bgw coverage
+bgw sweep --json --delay 300
+bgw sweep --pages diag,wconfig_unified,dhcpserver --json
+bgw sweep --include-parsed --json
+bgw sweep --forms --json
+bgw sweep --out router-dumps/latest
+bgw page <page-or-tab> --forms --json
+bgw page <page-or-tab> --raw
+bgw inspect <page-or-tab> --json
 ```
 
 Use `--raw` only with a single page and only when raw HTML is needed. Prefer `--out router-dumps/<name>` for local artifacts because `router-dumps/` is ignored.
@@ -76,13 +76,13 @@ Fixture capture is read-only at the router-config level, but it still logs in an
 ## Dry-Run Operations
 
 ```bash
-bun run src/cli.ts actions
-bun run src/cli.ts action <name>
-bun run src/cli.ts set <page> KEY=VALUE...
-bun run src/cli.ts submit <page> <button> [KEY=VALUE...]
-bun run src/cli.ts diagnostics ping <host> [--ipv4|--ipv6]
-bun run src/cli.ts diagnostics traceroute <host> [--ipv4|--ipv6]
-bun run src/cli.ts diagnostics nslookup <host> [--ipv4|--ipv6]
+bgw actions
+bgw action <name>
+bgw set <page> KEY=VALUE...
+bgw submit <page> <button> [KEY=VALUE...]
+bgw diagnostics ping <host> [--ipv4|--ipv6]
+bgw diagnostics traceroute <host> [--ipv4|--ipv6]
+bgw diagnostics nslookup <host> [--ipv4|--ipv6]
 ```
 
 ## Commit Patterns
@@ -90,10 +90,10 @@ bun run src/cli.ts diagnostics nslookup <host> [--ipv4|--ipv6]
 Run only after explicit approval:
 
 ```bash
-bun run src/cli.ts action <name> --commit --confirm <TOKEN>
-bun run src/cli.ts set <page> KEY=VALUE --commit --confirm <TOKEN>
-bun run src/cli.ts submit <page> <button> KEY=VALUE --commit --confirm <TOKEN>
-bun run src/cli.ts diagnostics ping 1.1.1.1 --commit --confirm DIAG
+bgw action <name> --commit --confirm <TOKEN>
+bgw set <page> KEY=VALUE --commit --confirm <TOKEN>
+bgw submit <page> <button> KEY=VALUE --commit --confirm <TOKEN>
+bgw diagnostics ping 1.1.1.1 --commit --confirm DIAG
 ```
 
 ## Session Exhaustion
@@ -101,8 +101,8 @@ bun run src/cli.ts diagnostics ping 1.1.1.1 --commit --confirm DIAG
 Only wait for the router session pool when that exact failure mode is expected:
 
 ```bash
-printf '%s' "$BGW_ACCESS_CODE" | bun run src/cli.ts sweep --wait-for-session --access-code-stdin
-printf '%s' "$BGW_ACCESS_CODE" | bun run src/cli.ts sweep --wait-for-session --session-wait-timeout 120000 --session-wait-interval 10000 --access-code-stdin
+printf '%s' "$BGW_ACCESS_CODE" | bgw sweep --wait-for-session --access-code-stdin
+printf '%s' "$BGW_ACCESS_CODE" | bgw sweep --wait-for-session --session-wait-timeout 120000 --session-wait-interval 10000 --access-code-stdin
 ```
 
 Environment equivalents:

@@ -7,15 +7,15 @@ description: Troubleshoot and inspect a BGW320 home network through this repo's 
 
 ## Operating Context
 
-This skill is packaged in `skill/` inside the `bgw320-cli` source checkout. Prefer the local CLI implementation and repo docs over older copied-script assumptions.
+This skill is packaged in `skill/` inside the `bgw` source checkout. Prefer the local CLI implementation and repo docs over older copied-script assumptions.
 
 Run commands from the repository root, one directory above this skill folder:
 
 ```bash
-bun run src/cli.ts --help
+bgw --help
 ```
 
-If installed as a package or linked bin, `bgw` is equivalent. In this checkout, direct `bun run src/cli.ts ...` examples are the source of truth.
+Use `bgw ...` after global install or `bun link`. If `bgw` is not on PATH in a source checkout, run the same command through the package script, for example `bun run bgw -- --help`.
 
 ## Default Workflow
 
@@ -23,10 +23,10 @@ If installed as a package or linked bin, `bgw` is equivalent. In this checkout, 
 2. Use read-only JSON commands first:
 
 ```bash
-bun run src/cli.ts device status --json
-bun run src/cli.ts devices --all --json
-bun run src/cli.ts broadband status --json
-bun run src/cli.ts firewall status --json
+bgw device status --json
+bgw devices --all --json
+bgw broadband status --json
+bgw firewall status --json
 ```
 
 3. Use [references/command-map.md](references/command-map.md) when command shape is uncertain.
@@ -38,7 +38,7 @@ bun run src/cli.ts firewall status --json
 Prefer stdin for access codes so secrets do not land in shell history:
 
 ```bash
-printf '%s' "$BGW_ACCESS_CODE" | bun run src/cli.ts --access-code-stdin device status --json
+printf '%s' "$BGW_ACCESS_CODE" | bgw --access-code-stdin device status --json
 ```
 
 For session-local automation, copy [templates/env.example](templates/env.example) into the shell environment and fill values outside the repo. Never commit real access codes.

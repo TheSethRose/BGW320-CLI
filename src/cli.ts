@@ -47,7 +47,7 @@ async function main(argv: string[]): Promise<void> {
     accessCode,
     timeoutMs: command.options.timeoutMs,
     insecureTls: command.options.insecureTls,
-    userAgent: "bgw320-cli/0.1.0",
+    userAgent: "bgw/0.1.0",
     waitForSession: command.options.waitForSession,
     sessionWaitTimeoutMs: command.options.sessionWaitTimeoutMs,
     sessionWaitIntervalMs: command.options.sessionWaitIntervalMs,
@@ -552,7 +552,7 @@ function requireValue(argv: string[], index: number, flag: string): string {
 }
 
 function printHelp(): void {
-  process.stdout.write(`bgw320-cli
+  process.stdout.write(`bgw
 
 Auth:
   Set BGW_ACCESS_CODE for automation, or pass --access-code-stdin to read it from stdin.

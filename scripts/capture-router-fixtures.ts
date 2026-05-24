@@ -63,7 +63,7 @@ const client = new BGW320Client({
   waitForSession: options.waitForSession,
   sessionWaitTimeoutMs: options.sessionWaitTimeoutMs,
   sessionWaitIntervalMs: options.sessionWaitIntervalMs,
-  userAgent: "bgw320-cli-fixture-capture/0.1.0",
+  userAgent: "bgw-fixture-capture/0.1.0",
 });
 
 const allPages = [...new Set(routerTabs.map((tab) => tab.page))].sort();
@@ -96,7 +96,7 @@ for (const pageResult of sweep) {
   } else {
     const message = pageResult.error ?? "Router did not return page HTML.";
     process.stdout.write(`failed: ${message}\n`);
-    const html = `<!-- bgw320-cli fixture capture failed for ${page}: ${sanitizeRouterText(message)} -->\n`;
+    const html = `<!-- bgw fixture capture failed for ${page}: ${sanitizeRouterText(message)} -->\n`;
     const parsed = parsePage(page, html);
     const expected = expectedFor(page, parsed, false);
     await writeFixtureSet(page, html, parsed, { ...expected, error: sanitizeRouterText(message) });

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**bgw320-cli** is a TypeScript CLI tool for managing BGW320 routers via their web interface. It uses headless browser automation to interact with router pages, parse HTML forms, and execute guarded operations with confirmation tokens.
+**bgw** is a TypeScript/Bun CLI tool for managing BGW320 routers via their web interface. It uses headless browser automation to interact with router pages, parse HTML forms, and execute guarded operations with confirmation tokens.
 
 ## Build & Test Commands
 
@@ -171,7 +171,7 @@ const client = new BGW320Client({
   accessCode: "1234",
   timeoutMs: 15000,
   insecureTls: false,
-  userAgent: "bgw320-cli/0.1.0",
+  userAgent: "bgw/0.1.0",
 });
 await client.login();
 ```
