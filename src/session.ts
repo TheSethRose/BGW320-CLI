@@ -20,14 +20,14 @@ type SessionPoolCooldown = {
   retryCount: number;
 };
 
-export type SessionCoordinatorOptions = {
+type SessionCoordinatorOptions = {
   cacheTtlMs: number;
   poolCooldownMs: number;
   lockTimeoutMs: number;
   waitForSession: boolean;
 };
 
-export type SessionState = {
+type SessionState = {
   cached: boolean;
   cacheExpiresAt?: number | undefined;
   poolCooldownUntil?: number | undefined;

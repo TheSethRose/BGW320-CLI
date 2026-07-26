@@ -42,19 +42,17 @@ export type ParsedField = {
   readOnly?: boolean | undefined;
 };
 
-export type ParsedOption = {
-  value: string;
-  label: string;
-  selected: boolean;
-  disabled: boolean;
-};
-
 export type ParsedSelect = {
   name: string;
   value: string;
   options: string[];
   sensitive: boolean;
-  optionDetails?: ParsedOption[] | undefined;
+  optionDetails?: Array<{
+    value: string;
+    label: string;
+    selected: boolean;
+    disabled: boolean;
+  }> | undefined;
   disabled?: boolean | undefined;
 };
 
