@@ -1,5 +1,5 @@
 ---
-name: home-network-management
+name: network-management
 description: Troubleshoot and inspect a BGW320 home network through this repo's TypeScript/Bun gateway CLI. Use when working on read-only router status checks, device inventory, broadband/fiber/firewall/Wi-Fi diagnostics, JSON capture, sweep/audit coverage, fixture capture, dry-run router mutations, guarded commits, and safe handling of secrets or device information.
 ---
 

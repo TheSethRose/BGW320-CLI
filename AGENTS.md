@@ -130,7 +130,7 @@ Broad `sweep`, `scan`, `schema`, `audit`, `readiness`, and fixture capture share
 
 - [`README.md`](README.md): user-facing install, commands, safety, output and fixture workflow.
 - [`docs/FUNCTIONALITY_COVERAGE_REVIEW.md`](docs/FUNCTIONALITY_COVERAGE_REVIEW.md): endpoint dispositions, capability evidence and known limits.
-- [`skill/SKILL.md`](skill/SKILL.md): bundled agent workflow and safety routing.
+- [`skills/network-management/SKILL.md`](skills/network-management/SKILL.md): bundled agent workflow and safety routing.
 - [`skill/references/`](skill/references): command map, inspection notes and safety model.
 
 Keep help text, README, bundled skill documentation, endpoint registry, fixture expectations, and tests synchronized when behavior changes.

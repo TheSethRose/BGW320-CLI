@@ -1,7 +1,9 @@
 # BGW320 CLI functionality and data-coverage review
 
-Review date: 2026-07-26  
-Observed gateway family: AT&T BGW320-505  
+Review date: 2026-07-26
+
+Observed gateway family: AT&T BGW320-505
+
 Scope: current repository, 37-page sanitized fixture pack, existing read-only review and saved evidence, one targeted read-only GET to the already-linked `wconfig.ha` endpoint, and the Nokia BGW320-505 Product Guide.
 
 ## Executive conclusion
@@ -212,7 +214,7 @@ Generic parsing remains intentionally conservative. It returns blank/unknown evi
 | `tests/pages.test.ts`, `tests/command-fixtures.test.ts`, `tests/router-fixtures.test.ts` | Registry/command/fixture completeness for all 37 pages. |
 | `tests/sweep.test.ts`, `tests/audit.test.ts`, `tests/cli.test.ts` | Shared traversal, pool-full stop, compact metadata, audit and help/early safety gates. |
 | `tests/fixture-sanitize.test.ts`, `tests/fixtures/README.md` | Capture privacy regression and local fixture handling contract. |
-| `README.md`, `skill/SKILL.md`, `skill/references/*.md`, `skill/templates/env.example`, `skill/agents/openai.yaml` | User and agent workflows reconciled with the current registry, evidence limits, session safety and output model. |
+| `README.md`, `skills/network-management/SKILL.md`, `skill/references/*.md`, `skill/templates/env.example`, `skill/agents/openai.yaml` | User and agent workflows reconciled with the current registry, evidence limits, session safety and output model. |
 | `package.json`, `bun.lock`, `tsconfig.json`, `eslint.config.js`, `knip.json` | Build/test/dependency/type/lint/dead-code/package-validation configuration included in the offline validation gates. |
 | `AGENTS.md` | Repository safety, fixture-first, dry-run and validation instructions followed. |
 

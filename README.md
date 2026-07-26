@@ -40,7 +40,7 @@ The CLI depends on Bun because the executable points at TypeScript source with a
 
 ## Agent Skill
 
-This repo includes a Codex/OpenAI skill in [`skill/SKILL.md`](skill/SKILL.md). When using an agent that supports local skills, point it at the `skill/` folder so it can use the bundled safety model, command map, and inspection notes for `bgw`.
+This repo includes a Codex/OpenAI skill in [`skills/network-management/SKILL.md`](skills/network-management/SKILL.md). When using an agent that supports local skills, point it at the `skill/` folder so it can use the bundled safety model, command map, and inspection notes for `bgw`.
 
 ## Quality Checks
 
