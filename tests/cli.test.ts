@@ -51,3 +51,34 @@ test("diagnostic commit requires confirmation before router access", () => {
   expect(result.status).toBe(1);
   expect(result.stderr).toContain("Re-run with --commit --confirm DIAG");
 });
+
+test("generic set commit requires confirmation before router access", () => {
+  const result = spawnSync("bun", ["run", "src/cli.ts", "set", "diag", "run=Run", "--commit"], {
+    cwd: process.cwd(),
+    env: { ...process.env, BGW_ACCESS_CODE: "unused" },
+    encoding: "utf8",
+  });
+
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("Re-run with --commit --confirm DIAG");
+});
+
+test("generic submit commit requires confirmation before router access", () => {
+  const result = spawnSync("bun", ["run", "src/cli.ts", "submit", "diag", "Ping", "--commit"], {
+    cwd: process.cwd(),
+    env: { ...process.env, BGW_ACCESS_CODE: "unused" },
+    encoding: "utf8",
+  });
+
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("Re-run with --commit --confirm DIAG");
+});
+
+test("invalid numeric options fail before router access", () => {
+  const result = spawnSync("bun", ["run", "src/cli.ts", "sweep", "--delay", "-1"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("--delay must be a finite number");
+});

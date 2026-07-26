@@ -3,7 +3,7 @@ import { BGW320Client, RouterAuthError, RouterConnectionError, RouterSessionPool
 import { envDefaultOptions, resolveAccessCode, type GlobalOptions } from "./config.js";
 import { parsedPageOutput, printAudit, printCompositeStatus, printDeviceList, printDeviceStatus, printJson, printKeyValues, printLogs, printOperation, printPageFetchError, printParsedPage, printScans, printSitemap } from "./format.js";
 import { parseLogs, parsePage, parseSitemap } from "./parser.js";
-import { buildMutationPlan, buildSubmitPlan, confirmTokenForPage, dangerousPages, guardedMutationPages } from "./mutations.js";
+import { buildMutationPlan, buildSubmitPlan, confirmTokenForPage, dangerousPages } from "./mutations.js";
 import { listSections, resolvePage, resolveSectionCommand, routerTabs, tabsForSection } from "./pages.js";
 import { displayActionPayload, getAction, routerActions } from "./actions.js";
 import { buildDiagnosticPlan, diagnosticButton, extractDiagnosticResult, isDiagnosticKind } from "./diagnostics.js";
@@ -145,7 +145,7 @@ async function runCommand(client: BGW320Client, command: Command): Promise<void>
         return;
       }
       if (action === "clear-cache") {
-        await clearSessionState(origin);
+        await clearSessionState(origin, command.options.sessionLockTimeoutMs);
         output(command, { ok: true, cleared: true }, () => process.stdout.write("session cache cleared\n"));
         return;
       }
@@ -273,6 +273,15 @@ async function runCommand(client: BGW320Client, command: Command): Promise<void>
       const page = resolvePage(requireArg(command, "page name"));
       const assignments = command.args.slice(1);
       if (assignments.length === 0) throw new Error("Missing KEY=VALUE assignment.");
+      const setConfirmation = confirmTokenForPage(page);
+      if (command.options.commit) {
+        if (dangerousPages.has(page)) {
+          throw new Error(`Refusing to mutate dangerous page '${page}'. Use an explicit action command if supported.`);
+        }
+        if (command.options.confirm !== setConfirmation) {
+          throw new Error(`Refusing to commit changes to '${page}'. Re-run with --commit --confirm ${setConfirmation}.`);
+        }
+      }
       const pageResult = await fetchParsedPage(client, page, { includeSecrets: true });
       if (!pageResult.ok || !pageResult.parsed) {
         process.exitCode = 2;
@@ -287,18 +296,9 @@ async function runCommand(client: BGW320Client, command: Command): Promise<void>
       }
 
       if (!command.options.commit) {
-        const token = guardedMutationPages.has(page) ? confirmTokenForPage(page) : undefined;
-        const result = setDryRun(plan, token);
+        const result = setDryRun(plan, setConfirmation);
         output(command, result, () => printOperation(result));
         return;
-      }
-
-      if (dangerousPages.has(page)) {
-        throw new Error(`Refusing to mutate dangerous page '${page}'. Use an explicit action command if supported.`);
-      }
-
-      if (guardedMutationPages.has(page) && command.options.confirm !== confirmTokenForPage(page)) {
-        throw new Error(`Refusing to commit changes to '${page}'. Re-run with --commit --confirm ${confirmTokenForPage(page)}.`);
       }
 
       const response = await client.postCgiPage(page, plan.rawPayload);
@@ -312,6 +312,15 @@ async function runCommand(client: BGW320Client, command: Command): Promise<void>
       const button = command.args[1];
       if (!button) throw new Error("Missing button name.");
       const assignments = command.args.slice(2);
+      const token = confirmTokenForPage(page);
+      if (command.options.commit) {
+        if (dangerousPages.has(page)) {
+          throw new Error(`Refusing generic submit on dangerous page '${page}'. Use an explicit action command if supported.`);
+        }
+        if (command.options.confirm !== token) {
+          throw new Error(`Refusing to submit '${button}' on '${page}'. Re-run with --commit --confirm ${token}.`);
+        }
+      }
       const pageResult = await fetchParsedPage(client, page, { includeSecrets: true });
       if (!pageResult.ok || !pageResult.parsed) {
         process.exitCode = 2;
@@ -320,20 +329,11 @@ async function runCommand(client: BGW320Client, command: Command): Promise<void>
       }
       const parsed = pageResult.parsed;
       const plan = buildSubmitPlan(page, parsed, button, assignments, command.options.includeSecrets);
-      const token = confirmTokenForPage(page);
 
       if (!command.options.commit) {
         const result = submitDryRun(plan, button, token);
         output(command, result, () => printOperation(result));
         return;
-      }
-
-      if (dangerousPages.has(page)) {
-        throw new Error(`Refusing generic submit on dangerous page '${page}'. Use an explicit action command if supported.`);
-      }
-
-      if (command.options.confirm !== token) {
-        throw new Error(`Refusing to submit '${button}' on '${page}'. Re-run with --commit --confirm ${token}.`);
       }
 
       const response = await client.postCgiPage(page, plan.rawPayload);
@@ -449,6 +449,14 @@ async function runSweepCommand(client: BGW320Client, command: Command, options: 
     },
   });
 
+  const poolFull = pages.find((page) => page.sessionPoolFull);
+  if (poolFull) {
+    throw new RouterSessionPoolFullError("Router web session pool is full.", {
+      ...(poolFull.waitedMs !== undefined ? { waitedMs: poolFull.waitedMs } : {}),
+      ...(poolFull.retryCount !== undefined ? { retryCount: poolFull.retryCount } : {}),
+    });
+  }
+
   if (command.options.raw && !writeArtifacts && !command.options.json) {
     process.stdout.write(pages[0]?.rawHtml ?? "");
     return [];
@@ -487,7 +495,7 @@ function parseArgs(argv: string[]): Command {
     full: false,
     confirm: undefined as string | undefined,
     protocol: undefined as "IPv4" | "IPv6" | undefined,
-    delayMs: 150,
+    delayMs: 750,
     limit: 20,
     includeParsed: false,
     pages: undefined as string[] | undefined,
@@ -512,7 +520,7 @@ function parseArgs(argv: string[]): Command {
         options.includeSecrets = true;
         break;
       case "--timeout":
-        options.timeoutMs = Number(requireValue(argv, ++i, "--timeout"));
+        options.timeoutMs = numericOption(requireValue(argv, ++i, "--timeout"), "--timeout", 1);
         break;
       case "--strict-tls":
         options.insecureTls = false;
@@ -551,19 +559,19 @@ function parseArgs(argv: string[]): Command {
         options.outDir = requireValue(argv, ++i, "--out");
         break;
       case "--delay":
-        options.delayMs = Number(requireValue(argv, ++i, "--delay"));
+        options.delayMs = numericOption(requireValue(argv, ++i, "--delay"), "--delay", 0);
         break;
       case "--limit":
-        options.limit = Number(requireValue(argv, ++i, "--limit"));
+        options.limit = numericOption(requireValue(argv, ++i, "--limit"), "--limit", 0);
         break;
       case "--wait-for-session":
         options.waitForSession = true;
         break;
       case "--session-wait-timeout":
-        options.sessionWaitTimeoutMs = Number(requireValue(argv, ++i, "--session-wait-timeout"));
+        options.sessionWaitTimeoutMs = numericOption(requireValue(argv, ++i, "--session-wait-timeout"), "--session-wait-timeout", 0);
         break;
       case "--session-wait-interval":
-        options.sessionWaitIntervalMs = Number(requireValue(argv, ++i, "--session-wait-interval"));
+        options.sessionWaitIntervalMs = numericOption(requireValue(argv, ++i, "--session-wait-interval"), "--session-wait-interval", 1);
         break;
       default:
         positional.push(arg);
@@ -575,6 +583,14 @@ function parseArgs(argv: string[]): Command {
     args: positional.slice(1),
     options,
   };
+}
+
+function numericOption(value: string, name: string, minimum: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < minimum) {
+    throw new Error(`${name} must be a finite number greater than or equal to ${minimum}.`);
+  }
+  return parsed;
 }
 
 function output(command: Command, value: unknown, tablePrinter: () => void): void {
@@ -640,7 +656,8 @@ Generic inspection:
 
   bgw session status | clear-cache
     Inspect or clear local session coordination state. clear-cache does not call
-    an unverified router logout endpoint.
+    an unverified router logout endpoint, but it also removes the local cooldown.
+    Use it only for explicit local-state troubleshooting, not as a retry shortcut.
 
   bgw sweep [--json] [--pages diag,dhcpserver] [--include-parsed] [--forms] [--out router-dumps/latest]
     Shared traversal command for every mapped tab. Default output is compact
@@ -653,7 +670,7 @@ Generic inspection:
   bgw schema [--json]
     Sweep with parsed/form detail enabled.
 
-  bgw audit [--json] [--delay 150]
+  bgw audit [--json] [--delay 750]
     Sweep-backed health check across every mapped tab. Keeps going through hangs
     and reports failed/fallback/empty/useful pages.
 
@@ -673,7 +690,7 @@ Operations are dry-run by default:
 
   bgw set <page> KEY=VALUE...
     Build a dry-run config mutation from current form state plus overrides.
-    Commit requires --commit --confirm TOKEN for guarded pages.
+    Every commit requires --commit --confirm TOKEN.
 
   bgw submit <page> <button> [KEY=VALUE...]
     Dry-run a discovered router button/form submit. Generic submit is blocked on
@@ -697,19 +714,20 @@ Global options:
   --pages <csv>             Limit sweep/scan/schema/audit traversal to selected pages
   --out <dir>               Write sweep raw HTML and parsed JSON artifacts to disk
   --timeout <ms>            Request timeout. Default: 15000
-  --delay <ms>              Delay between audit/scan requests. Default: 150
+  --delay <ms>              Delay between audit/scan/sweep requests. Default: 750
   --limit <n>               Limit displayed rows. Default: 20
   --wait-for-session        Wait/retry when the router says all web sessions are in use
   --session-wait-timeout <ms>   Wait timeout. Default: 120000
   --session-wait-interval <ms>  Wait poll interval. Default: 10000
-  --confirm <token>         Required token for committed guarded operations
-  --strict-tls              Enforce TLS validation. Usually fails on the router cert.
+  --confirm <token>         Required token for every committed operation
+  --strict-tls              Enforce TLS validation. Default router access does not verify its self-signed identity.
 
 Notes:
   Read commands only perform GET requests plus the login POST required by the router.
   The router web UI is flaky. Fallbacks are intentionally narrow so normal commands stay fast.
   Session-pool waiting is opt-in so basic commands do not appear hung. Env:
   BGW_WAIT_FOR_SESSION=1, BGW_SESSION_WAIT_TIMEOUT_MS, BGW_SESSION_WAIT_INTERVAL_MS.
+  An active local pool cooldown always fails fast, including with --wait-for-session.
   Agent bursts reuse a short-lived local router session cache under a per-host
   lock to avoid filling the web session pool. Env:
   BGW_SESSION_CACHE_TTL_MS, BGW_SESSION_POOL_COOLDOWN_MS, BGW_SESSION_LOCK_TIMEOUT_MS.

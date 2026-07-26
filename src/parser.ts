@@ -92,19 +92,40 @@ export function parsePage(page: string, html: string, options: { includeSecrets?
     : page === "diag"
       ? parseDiagnosticTables(html)
       : dedupeRecords(tables);
+  const pageSpecificTables = page === "wconfig_unified" ? parseWifiChannelTables(html) : [];
 
   return {
     page,
     title: getTitle(html),
     heading: getHeading(html),
     values,
-    tables: parsedTables,
+    tables: dedupeRecords([...parsedTables, ...pageSpecificTables]),
     fields,
     selects,
     textareas,
     buttons,
     forms,
   };
+}
+
+function parseWifiChannelTables(html: string): Record<string, string>[] {
+  const channels: Record<string, string>[] = [];
+  for (const match of html.matchAll(/<h2\b[^>]*>\s*((?:2\.4|5)\s*GHz)[\s\S]*?<\/h2>([\s\S]*?)(?=<h2\b|<\/form>|$)/gi)) {
+    const band = cleanText(match[1] ?? "");
+    const table = extractTables(match[2] ?? "")[0] ?? [];
+    const row = table.find((candidate) => cleanText(candidate[0] ?? "") === "Current Channel");
+    if (!row) continue;
+
+    const current = cleanText(row[1] ?? "");
+    const parsed = [...current.matchAll(/(\d+)\s*\(([^)]+)\)/g)];
+    channels.push({
+      Band: band,
+      "Current Channel": parsed.length > 0 ? parsed.map((entry) => entry[1]).join(", ") : current,
+      "Channel Width": [...new Set(parsed.map((entry) => cleanText(entry[2] ?? "")))].join(", "),
+      Mode: cleanText(row[2] ?? ""),
+    });
+  }
+  return channels;
 }
 
 export function parseDevices(html: string): Device[] {
@@ -126,9 +147,14 @@ export function parseDevices(html: string): Device[] {
           ip: split.length > 1 ? cleanText(split[0] ?? "") : "",
           mac: current["MAC Address"] ?? "",
           connection: current["Connection Type"] ?? "",
+          connectionSpeed: current["Connection Speed"],
           allocation: current.Allocation,
           lastActivity: current["Last Activity"],
           meshClient: current["Mesh Client"],
+          ipv6: current["IPv6 Address"],
+          deviceType: current.Type,
+          validLifetime: current["Valid Lifetime"],
+          preferredLifetime: current["Preferred Lifetime"],
         });
       };
 
@@ -329,13 +355,26 @@ function inputNamesFromForm(html: string, kind: "field" | "button"): string[] {
 
 function namesFromTags(html: string, tagName: "input" | "select" | "textarea" | "button"): string[] {
   const names = new Set<string>();
-  const pattern = new RegExp(`<${tagName}\\b[^>]*>`, "gi");
+  const pattern = tagPattern(tagName);
   for (const match of html.matchAll(pattern)) {
     const attrs = getAttrs(match[0] ?? "");
     const name = attrs.name || attrs.id;
     if (name) names.add(name);
   }
   return [...names];
+}
+
+function tagPattern(tagName: "input" | "select" | "textarea" | "button"): RegExp {
+  switch (tagName) {
+    case "input":
+      return /<input\b[^>]*>/gi;
+    case "select":
+      return /<select\b[^>]*>/gi;
+    case "textarea":
+      return /<textarea\b[^>]*>/gi;
+    case "button":
+      return /<button\b[^>]*>/gi;
+  }
 }
 
 function dedupeRecords(records: Record<string, string>[]): Record<string, string>[] {

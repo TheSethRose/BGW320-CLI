@@ -89,9 +89,14 @@ export type Device = {
   ip: string;
   mac: string;
   connection: string;
+  connectionSpeed?: string | undefined;
   allocation?: string | undefined;
   lastActivity?: string | undefined;
   meshClient?: string | undefined;
+  ipv6?: string | undefined;
+  deviceType?: string | undefined;
+  validLifetime?: string | undefined;
+  preferredLifetime?: string | undefined;
 };
 
 export type LogEntry = {

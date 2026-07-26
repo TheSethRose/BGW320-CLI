@@ -45,11 +45,7 @@ For session-local automation, copy [templates/env.example](templates/env.example
 
 The router web UI has a small session pool. Prefer one short burst of targeted commands over many broad sweeps. The CLI coordinates local processes with a per-router lock and short-lived session cache so repeated agent commands reuse one web session instead of logging in repeatedly.
 
-At the end of an agent run, clear local session coordination state:
-
-```bash
-bgw session clear-cache
-```
+Leave local session and cooldown state intact at the end of a normal run so later commands can reuse the authenticated session and respect session-pool backoff. Use `bgw session clear-cache` only when explicitly troubleshooting corrupt or obsolete local state; it acquires the per-router lock but removes both the cache and cooldown.
 
 Do not invent or call a router logout endpoint unless the current fixture data or repo code proves one exists for this firmware. The checked-in BGW320 fixtures do not advertise a logout link.
 
@@ -70,6 +66,6 @@ The CLI is intentionally conservative:
 - Dangerous generic submissions are blocked.
 - Router web sessions are flaky and limited, so retries need patience, not spam.
 - Use `bgw session status` before repeated live checks if session-pool behavior is suspected.
-- Use `bgw session clear-cache` when finished so the next run starts from a clean local coordinator state.
+- Do not clear local session or cooldown state simply to force a retry.
 
 Default posture: read-only first, dry-run second, commit only after the user approves the exact command.

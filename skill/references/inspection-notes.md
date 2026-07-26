@@ -18,8 +18,10 @@ These notes come from read-only inspection of the CLI behavior and router respon
 - Web UI sessions can exhaust with: `Router reports all web server sessions are in use. Wait for a router web session to timeout, then retry.`
 - Some pages can time out, especially broad status/LAN pages.
 - A router may return the login page after authentication when stale sessions exist.
-- `--strict-tls` is usually a bad default because the router cert is self-signed.
+- Router TLS is encrypted but identity is not verified by default because the gateway certificate is self-signed; strict validation needs explicit certificate trust or pinning.
 - Full sweeps should use a slower delay when the router is being unreliable.
+- Current Wi-Fi channel and width can appear on the configuration page, but RSSI, noise, retry counts, and association/roaming/disconnect history were not exposed by the reviewed gateway responses.
+- Device `last activity` and router-generated names do not prove disconnect time or stable device identity.
 
 ## Coverage Shape Observed
 

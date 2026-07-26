@@ -184,3 +184,15 @@ test("looksLikeLogin ignores configuration pages with password controls", () => 
     </form>
   `)).toBe(true);
 });
+
+test("parsePage extracts Wi-Fi current channels and widths", () => {
+  const parsed = parsePage("wconfig_unified", `
+    <h2>2.4 GHz Wi-Fi Channel Selection</h2>
+    <table><tr><th>Current Channel</th><td>6 (20 MHz)</td><td>Automatic</td></tr></table>
+    <h2>5 GHz Wi-Fi Channel Selection</h2>
+    <table><tr><th>Current Channel</th><td>60 (80 MHz),161 (80 MHz)</td><td>Automatic</td></tr></table>
+  `);
+
+  expect(parsed.tables).toContainEqual({ Band: "2.4 GHz", "Current Channel": "6", "Channel Width": "20 MHz", Mode: "Automatic" });
+  expect(parsed.tables).toContainEqual({ Band: "5 GHz", "Current Channel": "60, 161", "Channel Width": "80 MHz", Mode: "Automatic" });
+});

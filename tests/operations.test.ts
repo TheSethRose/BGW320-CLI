@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { actionDryRun, diagnosticDryRun, setDryRun, submitDryRun } from "../src/operations.js";
+import { actionDryRun, diagnosticDryRun, quoteArg, setDryRun, submitDryRun } from "../src/operations.js";
 import type { MutationPlan } from "../src/mutations.js";
 
 const plan: MutationPlan = {
@@ -60,4 +60,9 @@ test("submitDryRun and diagnosticDryRun include commit commands", () => {
     confirmation: "DIAG",
     commitCommand: "diagnostics ping example.com --commit --confirm DIAG",
   });
+});
+
+test("quoteArg prevents shell substitution in generated commands", () => {
+  expect(quoteArg("$(touch marker)")).toBe("'$(touch marker)'");
+  expect(quoteArg("it's")).toBe("'it'\\''s'");
 });

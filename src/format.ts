@@ -11,6 +11,19 @@ type ParsedPageOutput = ParsedPage & {
   summary: Record<string, string>;
 };
 
+function sanitizeTerminalText(value: string, options: { singleLine?: boolean } = {}): string {
+  const escape = String.fromCharCode(27);
+  let sanitized = value
+    .replace(new RegExp(`${escape}\\][^\\u0007]*(?:\\u0007|${escape}\\\\)`, "g"), "")
+    .replace(new RegExp(`${escape}\\[[0-?]*[ -/]*[@-~]`, "g"), "");
+
+  sanitized = [...sanitized].filter((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return character === "\n" || character === "\t" || (code >= 32 && !(code >= 127 && code <= 159));
+  }).join("");
+  return options.singleLine ? sanitized.replace(/[\n\t]+/g, " ") : sanitized;
+}
+
 export function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
@@ -26,14 +39,14 @@ export function printKeyValues(values: Record<string, string>): void {
   const entries = Object.entries(values);
   const width = Math.min(42, Math.max(12, ...entries.map(([key]) => key.length)));
   for (const [key, value] of entries) {
-    process.stdout.write(`${key.padEnd(width)}  ${value}\n`);
+    process.stdout.write(`${sanitizeTerminalText(key, { singleLine: true }).padEnd(width)}  ${sanitizeTerminalText(value, { singleLine: true })}\n`);
   }
 }
 
 export function printSitemap(entries: SitemapEntry[]): void {
   const pageWidth = Math.max(4, ...entries.map((entry) => entry.page.length));
   for (const entry of entries) {
-    process.stdout.write(`${entry.page.padEnd(pageWidth)}  ${entry.label}\n`);
+    process.stdout.write(`${sanitizeTerminalText(entry.page, { singleLine: true }).padEnd(pageWidth)}  ${sanitizeTerminalText(entry.label, { singleLine: true })}\n`);
   }
 }
 
@@ -55,16 +68,17 @@ function printDevices(devices: Device[], options: { limit?: number } = {}): void
     IP: device.ip,
     MAC: device.mac,
     Connection: summarizeConnection(device.connection),
+    Speed: device.connectionSpeed ?? "",
     "Last activity": device.lastActivity ?? "",
     Name: device.name,
-  })), ["Status", "IP", "MAC", "Connection", "Last activity", "Name"]);
+  })), ["Status", "IP", "MAC", "Connection", "Speed", "Last activity", "Name"]);
   printOverflow(devices.length, limit);
 }
 
 export function printDeviceList(result: DeviceListResult, options: { limit?: number } = {}): void {
   if (result.fallback) {
     process.stdout.write("Device List (fallback from IP Allocation)\n");
-    if (result.error) process.stdout.write(`devices.ha did not return: ${result.error}\n`);
+    if (result.error) process.stdout.write(`devices.ha did not return: ${sanitizeTerminalText(result.error, { singleLine: true })}\n`);
     process.stdout.write("\n");
   }
   printDevices(result.devices, options);
@@ -113,7 +127,7 @@ export function printScans(scans: PageScan[]): void {
 
 export function printPageFetchError(result: ParsedPageResult): void {
   process.stdout.write(`Page unavailable: ${result.page}\n`);
-  if (result.error) process.stdout.write(`${result.error}\n`);
+  if (result.error) process.stdout.write(`${sanitizeTerminalText(result.error)}\n`);
 }
 
 export function printOperation(result: OperationResult): void {
@@ -141,7 +155,7 @@ export function printOperation(result: OperationResult): void {
   printKeyValues(values);
   if (result.result) {
     process.stdout.write("\nResult\n");
-    process.stdout.write(`${result.result}\n`);
+    process.stdout.write(`${sanitizeTerminalText(result.result)}\n`);
   }
 }
 
@@ -153,7 +167,7 @@ export function printDeviceStatus(result: DeviceStatusResult, options: { limit?:
 
   process.stdout.write("Device Status (fallback summary)\n\n");
   if (result.error) {
-    process.stdout.write(`home.ha did not return: ${result.error}\n\n`);
+    process.stdout.write(`home.ha did not return: ${sanitizeTerminalText(result.error, { singleLine: true })}\n\n`);
   }
 
   printDeviceStatusSummary(result.sections);
@@ -167,7 +181,7 @@ export function printCompositeStatus(title: string, result: CompositeStatusResul
 
   process.stdout.write(`${title} (fallback)\n\n`);
   if (result.error) {
-    process.stdout.write(`${result.page}.ha did not return: ${result.error}\n\n`);
+    process.stdout.write(`${sanitizeTerminalText(result.page, { singleLine: true })}.ha did not return: ${sanitizeTerminalText(result.error, { singleLine: true })}\n\n`);
   }
 
   printStatusSections(result.sections, options.limit ?? 20);
@@ -200,7 +214,7 @@ export function printAudit(audit: AuditResult): void {
 }
 
 export function printParsedPage(page: ParsedPage, options: { forms?: boolean; limit?: number } = {}): void {
-  process.stdout.write(`${page.title || page.page}\n\n`);
+  process.stdout.write(`${sanitizeTerminalText(page.title || page.page, { singleLine: true })}\n\n`);
 
   if (printSpecializedPage(page, options.limit ?? 20)) {
     if (options.forms) printFormDetails(page);
@@ -303,10 +317,10 @@ function printRows(rows: Record<string, string>[], columns: string[]): void {
   }
 
   const widths = columns.map((column) => Math.min(36, Math.max(column.length, ...rows.map((row) => String(row[column] ?? "").length))));
-  process.stdout.write(`${columns.map((column, i) => column.padEnd(widths[i] ?? column.length)).join("  ")}\n`);
+  process.stdout.write(`${columns.map((column, i) => sanitizeTerminalText(column, { singleLine: true }).padEnd(widths[i] ?? column.length)).join("  ")}\n`);
   process.stdout.write(`${widths.map((width) => "-".repeat(width)).join("  ")}\n`);
   for (const row of rows) {
-    process.stdout.write(`${columns.map((column, i) => truncate(String(row[column] ?? ""), widths[i] ?? 12).padEnd(widths[i] ?? 12)).join("  ")}\n`);
+    process.stdout.write(`${columns.map((column, i) => truncate(sanitizeTerminalText(String(row[column] ?? ""), { singleLine: true }), widths[i] ?? 12).padEnd(widths[i] ?? 12)).join("  ")}\n`);
   }
 }
 
@@ -616,9 +630,9 @@ function quoteArg(value: string): string {
 
 function printStatusSections(sections: StatusSection[], limit: number): void {
   for (const section of sections) {
-    process.stdout.write(`${section.title || section.heading || section.page}\n`);
+    process.stdout.write(`${sanitizeTerminalText(section.title || section.heading || section.page, { singleLine: true })}\n`);
     if (!section.ok) {
-      process.stdout.write(`${section.error ?? "unavailable"}\n\n`);
+      process.stdout.write(`${sanitizeTerminalText(section.error ?? "unavailable")}\n\n`);
       continue;
     }
     printKeyValues(section.values);
@@ -635,9 +649,9 @@ function printStatusSections(sections: StatusSection[], limit: number): void {
 function printDeviceStatusSummary(sections: StatusSection[]): void {
   for (const section of sections) {
     const title = section.title || section.heading || section.page;
-    process.stdout.write(`${title}\n`);
+    process.stdout.write(`${sanitizeTerminalText(title, { singleLine: true })}\n`);
     if (!section.ok) {
-      process.stdout.write(`${section.error ?? "unavailable"}\n\n`);
+      process.stdout.write(`${sanitizeTerminalText(section.error ?? "unavailable")}\n\n`);
       continue;
     }
     printKeyValues(summarizeStatusSection(section));

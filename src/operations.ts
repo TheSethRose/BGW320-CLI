@@ -61,7 +61,7 @@ export function setDryRun(plan: MutationPlan, confirmation: string | undefined):
     page: plan.page,
     guarded: confirmation !== undefined,
     dangerous: false,
-    commitCommand: confirmation ? `set ${plan.page} KEY=VALUE... --commit --confirm ${confirmation}` : `set ${plan.page} KEY=VALUE... --commit`,
+    commitCommand: confirmation ? `set ${quoteArg(plan.page)} KEY=VALUE... --commit --confirm ${quoteArg(confirmation)}` : `set ${quoteArg(plan.page)} KEY=VALUE... --commit`,
     changes: plan.displayChanges,
     payload: plan.displayPayload,
     ...(confirmation ? { confirmation } : {}),
@@ -144,6 +144,6 @@ export function diagnosticCommitted(kind: DiagnosticKind, target: string, status
   };
 }
 
-function quoteArg(value: string): string {
-  return /^[a-z0-9_.:-]+$/i.test(value) ? value : JSON.stringify(value);
+export function quoteArg(value: string): string {
+  return /^[a-z0-9_.:-]+$/i.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
 }

@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { BGW320Client } from "../src/client.js";
 import { envDefaultOptions } from "../src/config.js";
 import { parsedDataCount } from "../src/fetch.js";
 import { parsePage } from "../src/parser.js";
 import { routerTabs } from "../src/pages.js";
+import { withRouterSession } from "../src/session.js";
 import { sweepRouter } from "../src/sweep.js";
 import type { ParsedPage } from "../src/types.js";
 
@@ -43,7 +44,8 @@ const fixtureRoot = join(root, "tests", "fixtures");
 const htmlDir = join(fixtureRoot, "router-html");
 const parsedDir = join(fixtureRoot, "parsed");
 const expectedDir = join(fixtureRoot, "expected");
-const delayMs = Number(process.env.BGW_FIXTURE_DELAY_MS || 750);
+const requestedDelayMs = Number(process.env.BGW_FIXTURE_DELAY_MS || 750);
+const delayMs = Number.isFinite(requestedDelayMs) ? Math.max(750, requestedDelayMs) : 750;
 const options = envDefaultOptions();
 const accessCode = process.env.BGW_ACCESS_CODE;
 
@@ -60,7 +62,7 @@ const client = new BGW320Client({
   accessCode,
   timeoutMs: options.timeoutMs,
   insecureTls: options.insecureTls,
-  waitForSession: options.waitForSession,
+  waitForSession: false,
   sessionWaitTimeoutMs: options.sessionWaitTimeoutMs,
   sessionWaitIntervalMs: options.sessionWaitIntervalMs,
   userAgent: "bgw-fixture-capture/0.1.0",
@@ -74,14 +76,19 @@ const requestedPages = process.env.BGW_FIXTURE_PAGES
 const pages = requestedPages?.length ? requestedPages : allPages;
 let captured = 0;
 
-const sweep = await sweepRouter(client, {
+const sweep = await withRouterSession(client, {
+  cacheTtlMs: options.sessionCacheTtlMs,
+  poolCooldownMs: options.sessionPoolCooldownMs,
+  lockTimeoutMs: options.sessionLockTimeoutMs,
+  waitForSession: false,
+}, () => sweepRouter(client, {
   delayMs,
   pages,
   includeRaw: true,
   includeParsed: true,
   includeSecrets: false,
   useFallbacks: false,
-});
+}));
 
 for (const pageResult of sweep) {
   const page = pageResult.page;
@@ -140,9 +147,15 @@ function expectedFor(page: string, parsed: ParsedPage, pageLoads: boolean): Expe
 }
 
 async function writeFixtureSet(page: string, html: string, parsed: ParsedPage, expected: ExpectedFixture & { error?: string }): Promise<void> {
-  await writeFile(join(htmlDir, `${page}.html`), `${html.trimEnd()}\n`);
-  await writeFile(join(parsedDir, `${page}.json`), `${JSON.stringify(parsed, null, 2)}\n`);
-  await writeFile(join(expectedDir, `${page}.json`), `${JSON.stringify(expected, null, 2)}\n`);
+  const paths = [
+    join(htmlDir, `${page}.html`),
+    join(parsedDir, `${page}.json`),
+    join(expectedDir, `${page}.json`),
+  ];
+  await writeFile(paths[0]!, `${html.trimEnd()}\n`, { mode: 0o600 });
+  await writeFile(paths[1]!, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(paths[2]!, `${JSON.stringify(expected, null, 2)}\n`, { mode: 0o600 });
+  await Promise.all(paths.map((path) => chmod(path, 0o600)));
 }
 
 function isJunkOnly(parsed: ParsedPage): boolean {
@@ -158,12 +171,12 @@ function sanitizeRouterText(value: string): string {
     .replace(/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g, "[redacted-ip]")
     .replace(/\b(?:[0-9a-f]{1,4}:){3,7}[0-9a-f]{1,4}\b/gi, "[redacted-ipv6]")
     .replace(/\b(?=[0-9a-f:]*::)(?:[0-9a-f]{0,4}:){1,7}[0-9a-f]{0,4}\b/gi, "[redacted-ipv6]")
-    .replace(/(name=["'](?:nonce|hashpassword|password|.*?pass.*?|.*?key.*?)["'][^>]*value=["'])[^"']*(["'])/gi, "$1[redacted]$2")
-    .replace(/(value=["'])[^"']*(["'][^>]*name=["'](?:nonce|hashpassword|password|.*?pass.*?|.*?key.*?)["'])/gi, "$1[redacted]$2");
+    .replace(/(name=["'](?:nonce|hashpassword|password|.*?pass.*?|.*?key.*?|.*?ssid.*?|wps.?pin|serial(?:number)?|hostname|device.?name)["'][^>]*value=["'])[^"']*(["'])/gi, "$1[redacted]$2")
+    .replace(/(value=["'])[^"']*(["'][^>]*name=["'](?:nonce|hashpassword|password|.*?pass.*?|.*?key.*?|.*?ssid.*?|wps.?pin|serial(?:number)?|hostname|device.?name)["'])/gi, "$1[redacted]$2");
 }
 
 function containsSensitiveFixtureValue(value: string): boolean {
-  return /65454<98@1/i.test(value)
+  return /"value":"(?!\[redacted\])[^"]+"[^{}]{0,160}"sensitive":true/i.test(value)
     || /\b[a-f0-9]{32}\b/i.test(value)
     || /\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/i.test(value);
 }

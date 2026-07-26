@@ -34,13 +34,23 @@ export function envDefaultOptions(): GlobalOptions {
     accessCodeStdin: false,
     json: false,
     includeSecrets: false,
-    timeoutMs: Number(process.env.BGW_TIMEOUT_MS || 15000),
+    timeoutMs: envNumber("BGW_TIMEOUT_MS", 15000, 1),
     insecureTls: process.env.BGW_INSECURE_TLS !== "0",
     waitForSession: process.env.BGW_WAIT_FOR_SESSION === "1",
-    sessionWaitTimeoutMs: Number(process.env.BGW_SESSION_WAIT_TIMEOUT_MS || 120000),
-    sessionWaitIntervalMs: Number(process.env.BGW_SESSION_WAIT_INTERVAL_MS || 10000),
-    sessionCacheTtlMs: Number(process.env.BGW_SESSION_CACHE_TTL_MS || 120000),
-    sessionPoolCooldownMs: Number(process.env.BGW_SESSION_POOL_COOLDOWN_MS || 300000),
-    sessionLockTimeoutMs: Number(process.env.BGW_SESSION_LOCK_TIMEOUT_MS || 300000),
+    sessionWaitTimeoutMs: envNumber("BGW_SESSION_WAIT_TIMEOUT_MS", 120000, 0),
+    sessionWaitIntervalMs: envNumber("BGW_SESSION_WAIT_INTERVAL_MS", 10000, 1),
+    sessionCacheTtlMs: envNumber("BGW_SESSION_CACHE_TTL_MS", 120000, 0),
+    sessionPoolCooldownMs: envNumber("BGW_SESSION_POOL_COOLDOWN_MS", 300000, 0),
+    sessionLockTimeoutMs: envNumber("BGW_SESSION_LOCK_TIMEOUT_MS", 300000, 1),
   };
+}
+
+function envNumber(name: string, fallback: number, minimum: number): number {
+  const value = process.env[name];
+  if (value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < minimum) {
+    throw new Error(`${name} must be a finite number greater than or equal to ${minimum}.`);
+  }
+  return parsed;
 }

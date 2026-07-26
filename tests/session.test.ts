@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
@@ -52,6 +53,40 @@ test("coordinator cooldown prevents repeated pool-full login attempts", async ()
   });
 });
 
+test("waitForSession respects an active local cooldown", async () => {
+  await withTempSessionDir(async () => {
+    let calls = 0;
+    await withFetch(async () => {
+      calls += 1;
+      return htmlResponse("<title>Login</title><p>all web server sessions are in use</p>");
+    }, async () => {
+      await expect(withRouterSession(testClient(), options(), () => testClient().login()))
+        .rejects.toBeInstanceOf(RouterSessionPoolFullError);
+      await expect(withRouterSession(testClient(), { ...options(), waitForSession: true }, () => testClient().login()))
+        .rejects.toBeInstanceOf(RouterSessionPoolFullError);
+    });
+    expect(calls).toBe(1);
+  });
+});
+
+test("session cache atomically replaces a symlink without writing its target", async () => {
+  await withTempSessionDir(async (dir) => {
+    const origin = routerSessionIdentity("http://router.local");
+    const key = createHash("sha256").update(origin).digest("hex").slice(0, 24);
+    const cachePath = join(dir, `${key}.session.json`);
+    const targetPath = join(dir, "target.txt");
+    await writeFile(targetPath, "unchanged\n", { mode: 0o644 });
+    await symlink(targetPath, cachePath);
+
+    const client = testClient();
+    client.importSession({ origin, authenticated: true, cookies: { sid: "abc" } });
+    await withRouterSession(client, options(), async () => "ok");
+
+    expect(await readFile(targetPath, "utf8")).toBe("unchanged\n");
+    expect((await lstat(cachePath)).isFile()).toBe(true);
+  });
+});
+
 test("clearSessionState removes local cache and cooldown", async () => {
   await withTempSessionDir(async () => {
     await clearSessionState(routerSessionIdentity("http://router.local"));
@@ -89,12 +124,12 @@ async function withFetch(fetchImpl: FetchMock, fn: () => Promise<void>): Promise
   }
 }
 
-async function withTempSessionDir(fn: () => Promise<void>): Promise<void> {
+async function withTempSessionDir(fn: (dir: string) => Promise<void>): Promise<void> {
   const original = process.env.BGW_SESSION_CACHE_DIR;
   const dir = await mkdtemp(join(tmpdir(), "bgw-session-test-"));
   process.env.BGW_SESSION_CACHE_DIR = dir;
   try {
-    await fn();
+    await fn(dir);
   } finally {
     if (original === undefined) {
       delete process.env.BGW_SESSION_CACHE_DIR;

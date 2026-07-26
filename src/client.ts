@@ -6,6 +6,7 @@ import { looksLikeLogin } from "./parser.js";
 class RouterError extends Error {}
 export class RouterAuthError extends RouterError {}
 export class RouterConnectionError extends RouterError {}
+export class RouterResponseError extends RouterError {}
 export class RouterSessionPoolFullError extends RouterAuthError {
   readonly sessionPoolFull = true;
   readonly waitedMs: number;
@@ -24,7 +25,11 @@ type RequestOptions = {
   body?: URLSearchParams | string;
   headers?: Record<string, string>;
   followRedirects?: boolean;
+  redirectsRemaining?: number;
 };
+
+const maxRedirects = 5;
+const maxResponseBytes = 4 * 1024 * 1024;
 
 export class BGW320Client {
   private readonly baseUrl: URL;
@@ -99,9 +104,9 @@ export class BGW320Client {
     const current = await this.getCgiPage(page);
     const nonce = extractNonce(current.body);
     const body = new URLSearchParams({ ...fields });
-    if (nonce && !body.has("nonce")) body.set("nonce", nonce);
+    if (nonce) body.set("nonce", nonce);
 
-    return this.request(`/cgi-bin/${page}.ha`, {
+    const response = await this.request(`/cgi-bin/${page}.ha`, {
       method: "POST",
       body,
       followRedirects: false,
@@ -110,6 +115,19 @@ export class BGW320Client {
         "Content-Type": "application/x-www-form-urlencoded",
       },
     });
+
+    if (routerSessionsFull(response.body)) {
+      this.authenticated = false;
+      throw new RouterSessionPoolFullError();
+    }
+    if (looksLikeLogin(response.body)) {
+      this.authenticated = false;
+      throw new RouterAuthError("Router returned the login page instead of accepting the operation.");
+    }
+    if (response.statusCode >= 400) {
+      throw new RouterResponseError(`Router rejected ${page}.ha with HTTP ${response.statusCode}.`);
+    }
+    return response;
   }
 
   async login(initialLoginHtml?: string, options: { force?: boolean } = {}): Promise<void> {
@@ -233,7 +251,7 @@ export class BGW320Client {
 
       this.storeCookies(getSetCookies(response.headers));
       const responseHeaders = headersToRecord(response.headers);
-      const text = await response.text();
+      const text = await readResponseText(response, maxResponseBytes, url);
       const result: HttpResponse = {
         statusCode: response.status,
         statusMessage: response.statusText,
@@ -244,8 +262,15 @@ export class BGW320Client {
 
       const location = response.headers.get("location");
       if (options.followRedirects !== false && response.status >= 300 && response.status < 400 && location) {
+        const redirectsRemaining = options.redirectsRemaining ?? maxRedirects;
+        if (redirectsRemaining <= 0) {
+          throw new RouterConnectionError(`Too many redirects while requesting ${url.toString()}`);
+        }
         const redirectUrl = new URL(location, url);
-        return this.request(`${redirectUrl.pathname}${redirectUrl.search}`, { method: "GET" });
+        return this.request(`${redirectUrl.pathname}${redirectUrl.search}`, {
+          method: "GET",
+          redirectsRemaining: redirectsRemaining - 1,
+        });
       }
 
       return result;
@@ -271,6 +296,30 @@ export class BGW320Client {
       if (name && value) this.cookies.set(name, value);
     }
   }
+}
+
+async function readResponseText(response: Response, limit: number, url: URL): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > limit) {
+    throw new RouterResponseError(`Router response from ${url.toString()} exceeded ${limit} bytes.`);
+  }
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    bytesRead += value.byteLength;
+    if (bytesRead > limit) {
+      await reader.cancel();
+      throw new RouterResponseError(`Router response from ${url.toString()} exceeded ${limit} bytes.`);
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
 }
 
 function sleep(ms: number): Promise<void> {

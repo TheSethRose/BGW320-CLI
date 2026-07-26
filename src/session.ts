@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { BGW320Client, RouterSessionPoolFullError } from "./client.js";
@@ -39,10 +39,11 @@ export async function withRouterSession<T>(
   run: () => Promise<T>,
 ): Promise<T> {
   const paths = sessionPaths(client.sessionIdentity());
-  await mkdir(dirname(paths.cache), { recursive: true });
+  await mkdir(dirname(paths.cache), { recursive: true, mode: 0o700 });
+  await chmod(dirname(paths.cache), 0o700);
   const release = await acquireLock(paths.lock, options.lockTimeoutMs);
   try {
-    await applyCooldown(paths.cooldown, options.waitForSession);
+    await applyCooldown(paths.cooldown);
     const cached = await readJson<CachedSession>(paths.cache);
     if (cached && cached.expiresAt > Date.now()) {
       client.importSession(cached);
@@ -88,12 +89,19 @@ export async function readSessionState(origin: string): Promise<SessionState> {
   };
 }
 
-export async function clearSessionState(origin: string): Promise<void> {
+export async function clearSessionState(origin: string, lockTimeoutMs = 300000): Promise<void> {
   const paths = sessionPaths(origin);
-  await Promise.all([
-    rm(paths.cache, { force: true }),
-    rm(paths.cooldown, { force: true }),
-  ]);
+  await mkdir(dirname(paths.lock), { recursive: true, mode: 0o700 });
+  await chmod(dirname(paths.lock), 0o700);
+  const release = await acquireLock(paths.lock, lockTimeoutMs);
+  try {
+    await Promise.all([
+      rm(paths.cache, { force: true }),
+      rm(paths.cooldown, { force: true }),
+    ]);
+  } finally {
+    await release();
+  }
 }
 
 export function routerSessionIdentity(host: string): string {
@@ -101,12 +109,7 @@ export function routerSessionIdentity(host: string): string {
   return new URL(/^https?:\/\//i.test(cleanHost) ? cleanHost : `https://${cleanHost}`).origin;
 }
 
-async function applyCooldown(path: string, waitForSession: boolean): Promise<void> {
-  if (waitForSession) {
-    await rm(path, { force: true });
-    return;
-  }
-
+async function applyCooldown(path: string): Promise<void> {
   const cooldown = await readJson<SessionPoolCooldown>(path);
   if (!cooldown) return;
   if (cooldown.until <= Date.now()) {
@@ -191,6 +194,8 @@ async function removeStaleLock(path: string, staleMs: number): Promise<void> {
 
 async function readJson<T>(path: string): Promise<T | undefined> {
   try {
+    const info = await lstat(path);
+    if (!info.isFile() || info.isSymbolicLink()) return undefined;
     return JSON.parse(await readFile(path, "utf8")) as T;
   } catch (error) {
     if (isNodeError(error, "ENOENT")) return undefined;
@@ -200,8 +205,25 @@ async function readJson<T>(path: string): Promise<T | undefined> {
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(value)}\n`, { mode: 0o600 });
+  const directory = dirname(path);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await chmod(directory, 0o700);
+
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(temporaryPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+    await handle.writeFile(`${JSON.stringify(value)}\n`);
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    await rename(temporaryPath, path);
+    await chmod(path, 0o600);
+  } catch (error) {
+    await handle?.close().catch(() => undefined);
+    await rm(temporaryPath, { force: true });
+    throw error;
+  }
 }
 
 function isNodeError(error: unknown, code: string): boolean {

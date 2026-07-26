@@ -9,25 +9,6 @@ export const dangerousPages = new Set([
   "update",
 ]);
 
-export const guardedMutationPages = new Set([
-  "remoteaccess",
-  "broadbandconfig",
-  "etherlan",
-  "ip6lan",
-  "wconfig_unified",
-  "wmacauth",
-  "dhcpserver",
-  "ipalloc",
-  "packetfilter",
-  "apphosting",
-  "pshosts",
-  "ippass",
-  "dosprotect",
-  "securityoptions",
-  "services",
-  "events",
-]);
-
 const ignoredInputTypes = new Set([
   "button",
   "submit",
@@ -91,7 +72,7 @@ function findButton(parsed: ParsedPage, buttonName: string): ParsedButton | unde
 function basePayload(parsed: ParsedPage): Record<string, string> {
   const payload: Record<string, string> = {};
   for (const field of parsed.fields) {
-    if (field.name === "hashpassword") continue;
+    if (field.name === "nonce" || field.name === "hashpassword") continue;
     if (ignoredInputTypes.has(field.type.toLowerCase())) continue;
     if ((field.type === "checkbox" || field.type === "radio") && !field.checked) continue;
     payload[field.name] = field.value;

@@ -16,8 +16,8 @@ bgw broadband fiber-status --json
 bgw home-network status --json
 bgw firewall status --json
 bgw diagnostics logs --json
-bgw sweep --json --delay 300
-bgw audit --json --delay 300
+bgw sweep --json --delay 750
+bgw audit --json --delay 750
 ```
 
 ## Sensitive Output Controls

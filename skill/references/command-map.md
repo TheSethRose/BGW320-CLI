@@ -8,10 +8,10 @@
 --json                    Machine-readable output
 --include-secrets         Disable redaction, only when intentional
 --timeout <ms>            Default 15000
---delay <ms>              Audit/scan/sweep delay, default 150
+--delay <ms>              Audit/scan/sweep delay, default 750
 --limit <n>               Default 20
---confirm <token>         Required for committed guarded operations
---strict-tls              Usually fails on the router cert
+--confirm <token>         Required for every committed operation
+--strict-tls              Verify router identity; requires a trusted or pinned certificate
 ```
 
 ## Most-Used Read Commands
@@ -52,7 +52,7 @@ bgw tabs
 bgw section <section>
 bgw sitemap
 bgw coverage
-bgw sweep --json --delay 300
+bgw sweep --json --delay 750
 bgw sweep --pages diag,wconfig_unified,dhcpserver --json
 bgw sweep --include-parsed --json
 bgw sweep --forms --json
@@ -112,3 +112,5 @@ BGW_WAIT_FOR_SESSION=1
 BGW_SESSION_WAIT_TIMEOUT_MS=120000
 BGW_SESSION_WAIT_INTERVAL_MS=10000
 ```
+
+An active local session-pool cooldown fails fast even with `--wait-for-session`. Do not run `session clear-cache` to bypass it.

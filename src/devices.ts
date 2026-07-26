@@ -17,6 +17,7 @@ export async function fetchDeviceList(client: BGW320Client, options: { includeOf
       devices: filterDevices(parseDevices(response.body), options.includeOffline === true),
     };
   } catch (error) {
+    if (error instanceof RouterAuthError) throw error;
     const fallback = await fetchParsedPageSoft(client, "ipalloc");
     if (!fallback.ok || !fallback.parsed) {
       return {

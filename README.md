@@ -99,7 +99,7 @@ printf '<access-code>' | bgw wifi --access-code-stdin
 | `page <page-or-tab>` | Fetch and parse any mapped tab or raw CGI page ID. |
 | `inspect <page-or-tab>` | Fetch a page and include parsed form fields/selects. |
 | `status` | Fetch the core status pages. |
-| `devices` | List connected devices. |
+| `devices` | List current and remembered devices; status comes from the gateway and may be stale. |
 | `wifi` | Fetch Wi-Fi configuration with secrets redacted by default. |
 | `nat` | Fetch NAT table details. |
 | `logs` | Fetch router logs. |
@@ -206,7 +206,9 @@ Default sweep output does not dump raw HTML or full parsed payloads. Use:
 
 `device status` first tries `home.ha`. If that page hangs, it falls back to a concise summary from System Information, Broadband Status, and Firewall Status. Use the section-specific commands for deeper output such as `broadband fiber-status` or `home-network status`.
 
-`devices` first tries `devices.ha`. If that page hangs, it falls back to `ipalloc.ha` and returns degraded device records with IP, name, MAC, status, and allocation.
+`devices` first tries `devices.ha`. If that page hangs, it falls back to `ipalloc.ha` and returns degraded device records with IP, name, MAC, status, and allocation. The primary page can also expose connection speed and IPv6 lifetime fields, but it does not establish disconnect history, stable identity across private MAC addresses, or trustworthy user-assigned names. Treat `last activity` as a timestamp reported by the gateway, not proof of a disconnect.
+
+The Wi-Fi page exposes configured SSIDs, enabled state, security controls, isolation, and current channel/width rows on firmware that renders them. It does not provide RSSI, noise floor, retry counts, association/roaming history, disconnect events, or enough evidence to diagnose RF health. Channel-selection buttons are mutating controls and are never invoked by read commands.
 
 `home-network status` first tries `lanstatistics.ha`. If that page hangs, it falls back to LAN configure, Subnets & DHCP, IP Allocation, and Wi-Fi configuration data.
 
@@ -227,7 +229,7 @@ BGW_SESSION_WAIT_TIMEOUT_MS=120000
 BGW_SESSION_WAIT_INTERVAL_MS=10000
 ```
 
-Waiting does not retry bad access codes, random connection failures, or parser failures.
+Waiting does not retry bad access codes, random connection failures, or parser failures. An active five-minute local pool cooldown still fails fast with `--wait-for-session`; do not clear it simply to force another authentication attempt. `bgw session clear-cache` acquires the same per-router lock and is intended only for explicit local-state troubleshooting.
 
 ## Router Fixture Pack
 
@@ -247,7 +249,7 @@ Capture sanitized fixtures from the real router with:
 BGW_ACCESS_CODE='<access-code>' bun run fixtures:capture
 ```
 
-The capture is sweep-backed, sequential, and read-only: it performs GET requests plus the login POST required by the router. It redacts access-code-adjacent fields, hashes, MAC addresses, and IP addresses before writing fixtures.
+The capture is sweep-backed, serialized through the same per-router session coordinator, paced at no less than 750 ms between pages, and read-only at the configuration level: it performs GET requests plus the login POST required by the router. It redacts access-code-adjacent fields, Wi-Fi identifiers, device identifiers, hashes, MAC addresses, and IP addresses before writing owner-only fixture files.
 
 `tests/router-fixtures.test.ts` verifies that a complete fixture pack covers every mapped page, that parsing the saved HTML exactly matches the saved parsed JSON, and that each expected file records whether data, useful fields/tables, buttons/forms, redaction, and non-junk parsing are present.
 
@@ -268,7 +270,7 @@ Use `--ipv4` or `--ipv6` to set the router protocol preference.
 
 Read commands only send GET requests plus the login POST required for authenticated pages.
 
-`set` defaults to dry-run. Actual POSTs require `--commit --confirm TOKEN`; the token is derived from the target CGI page, such as `WCONFIG-UNIFIED` for Wi-Fi.
+`set` defaults to dry-run. Every actual POST requires `--commit --confirm TOKEN`; the token is derived from the target CGI page, such as `WCONFIG-UNIFIED` for Wi-Fi.
 
 `action` defaults to dry-run. Actual action POSTs require `--commit --confirm TOKEN`; run `actions` to see tokens.
 
@@ -330,6 +332,8 @@ bgw action factory-reset
 Every `action` command is dry-run by default. `actions` prints the confirmation token required to commit each one. Reset/restart/factory-reset actions are marked dangerous and should be treated as destructive router operations.
 
 Sensitive values are redacted by default. Use `--include-secrets` only when intentionally inspecting local output. Debug/schema output still redacts secrets by default.
+
+The router normally presents a self-signed certificate, so the CLI currently accepts it by default. This encrypts traffic without proving router identity; use `--strict-tls` only after installing or pinning a certificate that the runtime can validate, and otherwise run the CLI only from a trusted local network.
 
 ## Router Tab Coverage
 

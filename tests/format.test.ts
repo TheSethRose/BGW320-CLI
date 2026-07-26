@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { printParsedPage } from "../src/format.js";
+import { printKeyValues, printParsedPage } from "../src/format.js";
 import { parsePage } from "../src/parser.js";
 
 test("Wi-Fi summary uses form state instead of noisy option text", () => {
@@ -87,6 +87,19 @@ test("Restart-style pages surface actions without form noise", () => {
   expect(output).toContain("Restart Device");
   expect(output).toContain("Controls");
   expect(output).toContain("Fields        0");
+});
+
+test("human output strips terminal control sequences", () => {
+  const escape = String.fromCharCode(27);
+  const output = captureStdout(() => printKeyValues({
+    Status: `${escape}[31mred${escape}[0m`,
+    Device: `${escape}]52;c;payload\u0007name`,
+  }));
+
+  expect(output).toContain("red");
+  expect(output).toContain("name");
+  expect(output).not.toContain(escape);
+  expect(output).not.toContain("payload");
 });
 
 function captureStdout(fn: () => void): string {

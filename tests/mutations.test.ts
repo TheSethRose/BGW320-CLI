@@ -31,8 +31,8 @@ test("buildMutationPlan keeps checked fields and applies changes", () => {
   const plan = buildMutationPlan("wconfig_unified", page, ["mode=manual"]);
 
   expect(plan.blocked).toBe(false);
-  expect(plan.rawPayload).toEqual({ nonce: "abc", enable: "1", mode: "manual" });
-  expect(plan.displayPayload).toEqual({ nonce: "[redacted]", enable: "1", mode: "manual" });
+  expect(plan.rawPayload).toEqual({ enable: "1", mode: "manual" });
+  expect(plan.displayPayload).toEqual({ enable: "1", mode: "manual" });
 });
 
 test("buildMutationPlan blocks dangerous pages", () => {

@@ -1,4 +1,4 @@
-const sensitiveNamePattern = /(password|passwd|passphrase|key|secret|access.?code|wpa|psk|ssidpwd|hashpassword|nonce)/i;
+const sensitiveNamePattern = /(password|passwd|passphrase|key|secret|access.?code|wpa|psk|ssidpwd|hashpassword|nonce|wps.?pin)/i;
 
 export function isSensitiveName(name: string): boolean {
   return sensitiveNamePattern.test(name);

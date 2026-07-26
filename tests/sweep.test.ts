@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
-import { RouterSessionPoolFullError } from "../src/client.js";
+import { RouterAuthError, RouterSessionPoolFullError } from "../src/client.js";
 import { scanRouter } from "../src/scan.js";
 import { sweepRouter } from "../src/sweep.js";
 
@@ -31,6 +31,16 @@ test("sweep continues after per-page failure", async () => {
     { page: "diag", ok: true },
   ]);
   expect(pages[0]?.error).toContain("boom");
+});
+
+test("sweep aborts immediately on authentication errors", async () => {
+  const client = fakeClient({ authErrorPages: new Set(["dhcpserver"]) });
+  await expect(sweepRouter(client as never, {
+    delayMs: 0,
+    pages: ["dhcpserver", "diag"],
+    useFallbacks: false,
+  })).rejects.toBeInstanceOf(RouterAuthError);
+  expect(client.calls).toEqual(["dhcpserver"]);
 });
 
 test("sweep stops fetching and marks remaining pages skipped when session pool is full", async () => {
@@ -142,13 +152,14 @@ test("CLI and fixture capture are wired to the shared sweep core", () => {
   expect(capture).toContain("sweepRouter");
 });
 
-function fakeClient(options: { failPages?: Set<string>; sessionPoolFullPages?: Set<string> } = {}): { calls: string[]; getCgiPage: (page: string) => Promise<unknown> } {
+function fakeClient(options: { failPages?: Set<string>; authErrorPages?: Set<string>; sessionPoolFullPages?: Set<string> } = {}): { calls: string[]; getCgiPage: (page: string) => Promise<unknown> } {
   const calls: string[] = [];
   return {
     calls,
     async getCgiPage(page: string) {
       calls.push(page);
       if (options.failPages?.has(page)) throw new Error(`boom ${page}`);
+      if (options.authErrorPages?.has(page)) throw new RouterAuthError("bad authentication");
       if (options.sessionPoolFullPages?.has(page)) throw new RouterSessionPoolFullError("pool full", { waitedMs: 5, retryCount: 2 });
       return {
         statusCode: 200,

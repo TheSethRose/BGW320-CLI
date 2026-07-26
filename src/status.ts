@@ -1,4 +1,4 @@
-import { BGW320Client } from "./client.js";
+import { BGW320Client, RouterAuthError } from "./client.js";
 import { fetchParsedPage, parsedDataCount, type ParsedPageResult } from "./fetch.js";
 import type { ParsedPage } from "./types.js";
 
@@ -184,6 +184,7 @@ async function fetchParsedPageSoft(client: BGW320Client, page: string, options: 
   try {
     return await fetchParsedPage(client, page, options);
   } catch (error) {
+    if (error instanceof RouterAuthError) throw error;
     return {
       page,
       ok: false,

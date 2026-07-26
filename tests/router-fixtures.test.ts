@@ -96,7 +96,7 @@ for (const page of fixturePackComplete ? mappedPages : []) {
     expect(expected.textareaNames).toEqual(parsed.textareas.map((textarea) => textarea.name).sort());
     expect(expected.buttonNames).toEqual(parsed.buttons.map((button) => button.name).sort());
     expect(expected.formActions).toEqual([...new Set(parsed.forms.map((form) => form.action))].sort());
-    expect(JSON.stringify(parsed)).not.toMatch(/65454<98@1|\b[a-f0-9]{32}\b|\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/i);
+    expect(JSON.stringify(parsed)).not.toMatch(/"value":"(?!\[redacted\])[^"]+"[^{}]{0,160}"sensitive":true|\b[a-f0-9]{32}\b|\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/i);
   });
 }
 

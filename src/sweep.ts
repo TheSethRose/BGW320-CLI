@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { RouterSessionPoolFullError, type BGW320Client } from "./client.js";
+import { RouterAuthError, RouterSessionPoolFullError, type BGW320Client } from "./client.js";
 import { fetchDeviceList } from "./devices.js";
 import { fetchParsedPage, parsedDataCount } from "./fetch.js";
 import { parsePage } from "./parser.js";
@@ -155,6 +155,9 @@ async function safeSweepPage(client: BGW320Client, tab: RouterTab, options: Swee
   try {
     return await sweepPage(client, tab, options);
   } catch (error) {
+    if (error instanceof RouterAuthError && !(error instanceof RouterSessionPoolFullError)) {
+      throw error;
+    }
     return failurePage(tab, error);
   }
 }

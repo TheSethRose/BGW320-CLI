@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { BGW320Client, RouterAuthError, RouterSessionPoolFullError } from "../src/client.js";
+import { BGW320Client, RouterAuthError, RouterConnectionError, RouterResponseError, RouterSessionPoolFullError } from "../src/client.js";
 
 test("session-pool-full fails fast by default", async () => {
   const calls: string[] = [];
@@ -110,6 +110,45 @@ test("session snapshots can be reused without logging in again", async () => {
     "POST /cgi-bin/login.ha ",
     "GET /cgi-bin/diag.ha sid=abc",
   ]);
+});
+
+test("postCgiPage replaces stale payload nonce with the immediate page nonce", async () => {
+  let posted = "";
+  await withFetch(async (_url, init) => {
+    if ((init?.method ?? "GET") === "POST") {
+      posted = String(init?.body ?? "");
+      return htmlResponse("", { status: 302, headers: { location: "/cgi-bin/home.ha" } });
+    }
+    return htmlResponse('<title>diag</title><input name="nonce" value="abc123">');
+  }, async () => {
+    await testClient().postCgiPage("diag", { nonce: "stale123", Ping: "Ping" });
+  });
+
+  expect(new URLSearchParams(posted).get("nonce")).toBe("abc123");
+});
+
+test("postCgiPage rejects router error responses", async () => {
+  await withFetch(async (_url, init) => {
+    if ((init?.method ?? "GET") === "POST") return htmlResponse("<title>Error</title>", { status: 500 });
+    return htmlResponse('<title>diag</title><input name="nonce" value="fresh123">');
+  }, async () => {
+    await expect(testClient().postCgiPage("diag", { Ping: "Ping" })).rejects.toBeInstanceOf(RouterResponseError);
+  });
+});
+
+test("redirects and response bodies are bounded", async () => {
+  let redirectCalls = 0;
+  await withFetch(async () => {
+    redirectCalls += 1;
+    return htmlResponse("", { status: 302, headers: { location: "/cgi-bin/sitemap.ha" } });
+  }, async () => {
+    await expect(testClient().getCgiPage("sitemap", { auth: false })).rejects.toBeInstanceOf(RouterConnectionError);
+  });
+  expect(redirectCalls).toBe(6);
+
+  await withFetch(async () => htmlResponse("small", { headers: { "content-length": String(4 * 1024 * 1024 + 1) } }), async () => {
+    await expect(testClient().getCgiPage("sitemap", { auth: false })).rejects.toBeInstanceOf(RouterResponseError);
+  });
 });
 
 function testClient(overrides: Partial<ConstructorParameters<typeof BGW320Client>[0]> = {}): BGW320Client {
