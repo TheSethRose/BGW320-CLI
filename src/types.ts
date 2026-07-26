@@ -38,6 +38,15 @@ export type ParsedField = {
   value: string;
   checked: boolean;
   sensitive: boolean;
+  disabled?: boolean | undefined;
+  readOnly?: boolean | undefined;
+};
+
+export type ParsedOption = {
+  value: string;
+  label: string;
+  selected: boolean;
+  disabled: boolean;
 };
 
 export type ParsedSelect = {
@@ -45,12 +54,16 @@ export type ParsedSelect = {
   value: string;
   options: string[];
   sensitive: boolean;
+  optionDetails?: ParsedOption[] | undefined;
+  disabled?: boolean | undefined;
 };
 
 export type ParsedTextarea = {
   name: string;
   value: string;
   sensitive: boolean;
+  disabled?: boolean | undefined;
+  readOnly?: boolean | undefined;
 };
 
 export type ParsedButton = {
@@ -59,6 +72,7 @@ export type ParsedButton = {
   value: string;
   label: string;
   sensitive: boolean;
+  disabled?: boolean | undefined;
 };
 
 export type ParsedForm = {
@@ -70,17 +84,33 @@ export type ParsedForm = {
   buttonNames: string[];
 };
 
+export type ParsedValueEntry = {
+  section: string;
+  label: string;
+  value: string;
+  defaultValue?: string | undefined;
+};
+
+export type ParsedLink = {
+  label: string;
+  href: string;
+  page?: string | undefined;
+  kind: "router-page" | "external" | "other";
+};
+
 export type ParsedPage = {
   page: string;
   title: string;
   heading: string;
   values: Record<string, string>;
+  valueEntries?: ParsedValueEntry[] | undefined;
   tables: Record<string, string>[];
   fields: ParsedField[];
   selects: ParsedSelect[];
   textareas: ParsedTextarea[];
   buttons: ParsedButton[];
   forms: ParsedForm[];
+  links?: ParsedLink[] | undefined;
 };
 
 export type Device = {

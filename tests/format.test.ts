@@ -102,6 +102,37 @@ test("human output strips terminal control sequences", () => {
   expect(output).not.toContain("payload");
 });
 
+test("Wi-Fi human output includes each router-reported radio channel", () => {
+  const page = parsePage("wconfig_unified", `
+    <title>Wi-Fi</title>
+    <h2>2.4 GHz Wi-Fi Channel Selection</h2>
+    <table><tr><th>Current Channel</th><td>6 (20 MHz)</td><td>Automatic</td></tr></table>
+    <h2>5 GHz Wi-Fi Channel Selection</h2>
+    <table><tr><th>Current Channel</th><td>60 (80 MHz),161 (80 MHz)</td><td>Automatic</td></tr></table>
+  `);
+
+  const output = captureStdout(() => printParsedPage(page));
+  expect(output).toContain("Current radios");
+  expect(output).toContain("2.4 GHz");
+  expect(output).toContain("5 GHz low-band");
+  expect(output).toContain("5 GHz high-band");
+});
+
+test("voice output omits a meaningless blank section summary", () => {
+  const page = parsePage("voice", `
+    <title>Voice Status</title>
+    <table>
+      <tr><th>Metric</th><th>Line 1</th><th>Line 2</th></tr>
+      <tr><td>Line Status</td><td>Registered</td><td>Disabled</td></tr>
+    </table>
+  `);
+
+  const output = captureStdout(() => printParsedPage(page));
+  expect(output).toContain("Reported rows");
+  expect(output).not.toContain("Sections");
+  expect(output).not.toContain("(blank)");
+});
+
 function captureStdout(fn: () => void): string {
   const stdout = process.stdout as NodeJS.WriteStream & { write: (chunk: unknown) => boolean };
   const originalWrite = stdout.write;

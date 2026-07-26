@@ -9,9 +9,9 @@ These notes come from read-only inspection of the CLI behavior and router respon
 - `devices --all` can return connected/offline inventory and can fall back to IP allocation when needed.
 - `home-network status` can fall back to LAN configure, Subnets & DHCP, IP Allocation, and Wi-Fi data.
 - `firewall security-options` can fall back to Firewall Status plus Firewall Advanced because some firmware returns page-not-found for the direct page.
-- Generic `page` and `inspect` support form/field/button discovery.
+- Generic `page` and `inspect` preserve duplicate values, fields, select labels/state, textareas, buttons, forms, links, and disabled/readonly metadata.
 - `sweep` is the shared traversal path for `scan`, `schema`, `audit`/`readiness`, and fixture capture.
-- `audit --json` reports mapped pages, dangerous pages, failed pages, fallback pages, useful/empty pages, counts for values/tables/forms, and status codes/errors.
+- `audit --json` reports mapped pages, dangerous pages, failed pages, fallback pages, useful/empty pages, counts for values/value entries/tables/controls/forms/links, and status codes/errors.
 
 ## Router Quirks Observed
 
@@ -21,6 +21,9 @@ These notes come from read-only inspection of the CLI behavior and router respon
 - Router TLS is encrypted but identity is not verified by default because the gateway certificate is self-signed; strict validation needs explicit certificate trust or pinning.
 - Full sweeps should use a slower delay when the router is being unreliable.
 - Current Wi-Fi channel and width can appear on the configuration page, but RSSI, noise, retry counts, and association/roaming/disconnect history were not exposed by the reviewed gateway responses.
+- The linked `wconfig` Advanced Wi-Fi endpoint exposes standards, configured bandwidth/channel selection, power, hidden/private/guest SSID controls, maximum clients, security, WPA, and WPS state. Its observed 5 GHz controls are combined rather than separate low/high-radio settings.
+- Fiber status can expose optical receive/transmit power and alarm thresholds. Preserve the raw router values and units; do not infer optical health from them.
+- Voice status/statistics expose line and call counters, but caller/phone fields are sensitive and do not prove provisioned feature behavior such as transfer or call waiting.
 - Device `last activity` and router-generated names do not prove disconnect time or stable device identity.
 
 ## Coverage Shape Observed
@@ -39,7 +42,7 @@ Representative pages:
 ```text
 home, sysinfo, devices, routerpasswd, remoteaccess, restart
 broadbandstatistics, broadbandconfig, fiberstat
-lanstatistics, etherlan, ip6lan, wconfig_unified, wmacauth, dhcpserver, ipalloc
+lanstatistics, etherlan, ip6lan, wconfig_unified, wconfig, wmacauth, dhcpserver, ipalloc
 voice, voiceconfig, voicestat
 firewall, services, packetfilter, apphosting, pshosts, ippass, dosprotect, securityoptions
 diag, speed, logs, update, reset, syslog, events, nattable, sitemap

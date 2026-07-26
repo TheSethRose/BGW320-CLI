@@ -40,6 +40,7 @@ const commandPages: Array<{ command: string[]; page: string }> = [
   { command: ["home-network", "configure"], page: "etherlan" },
   { command: ["home-network", "ipv6"], page: "ip6lan" },
   { command: ["home-network", "wi-fi"], page: "wconfig_unified" },
+  { command: ["home-network", "advanced-wi-fi"], page: "wconfig" },
   { command: ["home-network", "mac-filtering"], page: "wmacauth" },
   { command: ["home-network", "subnets-dhcp"], page: "dhcpserver" },
   { command: ["home-network", "ip-allocation"], page: "ipalloc" },

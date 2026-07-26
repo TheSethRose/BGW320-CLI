@@ -1,4 +1,4 @@
-import type { Device, LogEntry, ParsedButton, ParsedField, ParsedForm, ParsedPage, ParsedSelect, ParsedTextarea, SitemapEntry } from "./types.js";
+import type { Device, LogEntry, ParsedButton, ParsedField, ParsedForm, ParsedLink, ParsedPage, ParsedSelect, ParsedTextarea, ParsedValueEntry, SitemapEntry } from "./types.js";
 import { cleanText, extractTables, getAttrs, getHeading, getTitle, stripTags } from "./html.js";
 import { isSensitiveName, redactValue } from "./redact.js";
 
@@ -26,18 +26,12 @@ export function parsePage(page: string, html: string, options: { includeSecrets?
   const htmlTables = extractTables(html);
   const values: Record<string, string> = {};
   const tables: Record<string, string>[] = [];
+  const valueEntries = parseValueEntries(html, includeSecrets);
+  for (const entry of valueEntries) {
+    if (entry.value) values[entry.label] = entry.value;
+  }
 
   for (const table of htmlTables) {
-    for (const row of table) {
-      if (row.length === 2) {
-        const key = cleanText((row[0] ?? "").replace(/:$/, ""));
-        const value = cleanText(row[1] ?? "");
-        if (key && value && value !== "OffOn" && value !== "OnOff") {
-          values[key] = redactValue(key, value, includeSecrets);
-        }
-      }
-    }
-
     const headers = table[0];
     if (!headers || headers.length <= 2) continue;
     for (const row of table.slice(1)) {
@@ -69,6 +63,7 @@ export function parsePage(page: string, html: string, options: { includeSecrets?
   const textareas = parseTextareas(html, includeSecrets);
   const buttons = parseButtons(html, includeSecrets);
   const forms = parseForms(html);
+  const links = parseLinks(html);
 
   for (const field of fields) {
     if ((field.type === "radio" || field.type === "checkbox") && !field.checked) continue;
@@ -85,27 +80,119 @@ export function parsePage(page: string, html: string, options: { includeSecrets?
     if (textarea.value) values[`Field ${textarea.name}`] = textarea.value;
   }
 
-  const parsedTables = page === "sitemap"
+  let parsedTables = page === "sitemap"
     ? parseSitemap(html).map((entry) => ({ Page: entry.page, Label: entry.label, Href: entry.href }))
     : page === "speed"
     ? parseSpeedTables(html)
     : page === "diag"
       ? parseDiagnosticTables(html)
       : dedupeRecords(tables);
-  const pageSpecificTables = page === "wconfig_unified" ? parseWifiChannelTables(html) : [];
+  const pageSpecificTables = parsePageSpecificTables(page, html, fields, selects, includeSecrets);
+  if (["etherlan", "fiberstat", "voice", "voiceconfig", "voicestat"].includes(page)) parsedTables = [];
 
   return {
     page,
     title: getTitle(html),
     heading: getHeading(html),
     values,
+    valueEntries,
     tables: dedupeRecords([...parsedTables, ...pageSpecificTables]),
     fields,
     selects,
     textareas,
     buttons,
     forms,
+    links,
   };
+}
+
+function parsePageSpecificTables(
+  page: string,
+  html: string,
+  fields: ParsedField[],
+  selects: ParsedSelect[],
+  includeSecrets: boolean,
+): Record<string, string>[] {
+  switch (page) {
+    case "wconfig_unified":
+      return parseWifiChannelTables(html);
+    case "wconfig":
+      return parseAdvancedWifiTables(fields, selects);
+    case "etherlan":
+      return parseEthernetPortTables(selects);
+    case "wmacauth":
+      return parseWifiMacFilterTables(selects);
+    case "fiberstat":
+      return parseFiberThresholdTables(html);
+    case "voice":
+    case "voiceconfig":
+      return parseVoiceStatusTables(html, includeSecrets);
+    case "voicestat":
+      return parseVoiceStatisticsTables(html, includeSecrets);
+    default:
+      return [];
+  }
+}
+
+function parseValueEntries(html: string, includeSecrets: boolean): ParsedValueEntry[] {
+  const entries: ParsedValueEntry[] = [];
+  for (const tableMatch of html.matchAll(/<table\b[^>]*>[\s\S]*?<\/table>/gi)) {
+    const tableHtml = tableMatch[0] ?? "";
+    const section = nearestHeading(html, tableMatch.index ?? 0);
+    for (const rowMatch of tableHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const cells = [...(rowMatch[1] ?? "").matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((cell) => cell[1] ?? "");
+      if (cells.length !== 2 || /<(?:input|select|textarea|button)\b/i.test(cells[1] ?? "")) continue;
+      const rawLabel = stripTags(cells[0] ?? "").replace(/:$/, "");
+      if (!rawLabel) continue;
+      const { label, defaultValue } = splitDefaultValue(rawLabel, includeSecrets);
+      const value = redactValue(label, stripTags(cells[1] ?? ""), includeSecrets);
+      entries.push({
+        section,
+        label,
+        value,
+        ...(defaultValue !== undefined ? { defaultValue } : {}),
+      });
+    }
+  }
+  return entries;
+}
+
+function nearestHeading(html: string, before: number): string {
+  const headings = [...html.slice(0, before).matchAll(/<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/gi)];
+  return stripTags(headings.at(-1)?.[1] ?? "");
+}
+
+function splitDefaultValue(label: string, includeSecrets: boolean): { label: string; defaultValue?: string } {
+  const match = label.match(/^(.*?\bDefault):\s*(.+)$/i);
+  if (!match?.[1] || !match[2]) return { label };
+  const normalized = cleanText(match[1]);
+  return {
+    label: normalized,
+    defaultValue: redactValue(normalized, cleanText(match[2]), includeSecrets),
+  };
+}
+
+function parseLinks(html: string): ParsedLink[] {
+  const links: ParsedLink[] = [];
+  const seen = new Set<string>();
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const attrs = getAttrs(`<a ${match[1] ?? ""}>`);
+    const href = attrs.href ?? "";
+    if (!href) continue;
+    const label = stripTags(match[2] ?? "") || attrs.title || href;
+    const page = href.match(/\/cgi-bin\/([^/?#]+)\.ha/i)?.[1];
+    const kind: ParsedLink["kind"] = page ? "router-page" : /^https?:\/\//i.test(href) ? "external" : "other";
+    const key = `${href}:${label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    links.push({
+      label,
+      href,
+      ...(page ? { page } : {}),
+      kind,
+    });
+  }
+  return links;
 }
 
 function parseWifiChannelTables(html: string): Record<string, string>[] {
@@ -118,14 +205,210 @@ function parseWifiChannelTables(html: string): Record<string, string>[] {
 
     const current = cleanText(row[1] ?? "");
     const parsed = [...current.matchAll(/(\d+)\s*\(([^)]+)\)/g)];
-    channels.push({
-      Band: band,
-      "Current Channel": parsed.length > 0 ? parsed.map((entry) => entry[1]).join(", ") : current,
-      "Channel Width": [...new Set(parsed.map((entry) => cleanText(entry[2] ?? "")))].join(", "),
-      Mode: cleanText(row[2] ?? ""),
-    });
+    if (parsed.length === 0) {
+      channels.push({
+        Radio: band,
+        "Current Channel": current,
+        "Channel Width": "",
+        Mode: cleanText(row[2] ?? ""),
+      });
+      continue;
+    }
+    for (const entry of parsed) {
+      const channel = entry[1] ?? "";
+      channels.push({
+        Radio: radioName(band, channel, parsed.length),
+        "Current Channel": channel,
+        "Channel Width": cleanText(entry[2] ?? ""),
+        Mode: cleanText(row[2] ?? ""),
+      });
+    }
   }
   return channels;
+}
+
+function radioName(band: string, channel: string, count: number): string {
+  if (/^2\.4/i.test(band) || count === 1) return band;
+  return Number(channel) < 100 ? "5 GHz low-band" : "5 GHz high-band";
+}
+
+function parseAdvancedWifiTables(fields: ParsedField[], selects: ParsedSelect[]): Record<string, string>[] {
+  const field = (name: string): string => fields.find((candidate) => candidate.name === name)?.value ?? "";
+  const select = (name: string): string => selects.find((candidate) => candidate.name === name)?.value ?? "";
+  return [
+    {
+      Section: "Radio",
+      Radio: "2.4 GHz",
+      Enabled: select("wl80211on"),
+      Standard: select("standard"),
+      Bandwidth: select("bandwidth"),
+      Channel: select("channelplusauto"),
+      "Power level (%)": field("power"),
+    },
+    {
+      Section: "Radio",
+      Radio: "5 GHz (combined configuration)",
+      Enabled: select("wl80211on_5"),
+      Standard: select("standard_5"),
+      Bandwidth: select("bandwidth_5"),
+      Channel: "",
+      "Power level (%)": field("power_5"),
+    },
+    {
+      Section: "SSID",
+      Radio: "2.4 GHz",
+      Network: "Home",
+      Enabled: select("ussidenable"),
+      SSID: field("ssidname11"),
+      Hidden: select("hide"),
+      Security: select("security11"),
+      "WPA version": select("wpaversion"),
+      WPS: select("wps"),
+      "Maximum clients": field("maxclients"),
+    },
+    {
+      Section: "SSID",
+      Radio: "2.4 GHz",
+      Network: "Guest",
+      Enabled: select("gssidenable"),
+      SSID: field("ssidname12"),
+      Hidden: select("hide2"),
+      Security: select("security12"),
+      "WPA version": select("wpaversion2"),
+      WPS: "",
+      "Maximum clients": field("maxclients2"),
+    },
+    {
+      Section: "SSID",
+      Radio: "5 GHz (combined configuration)",
+      Network: "Home",
+      Enabled: select("wl80211on_5"),
+      SSID: field("ssidname21"),
+      Hidden: select("hide_5"),
+      Security: select("security21"),
+      "WPA version": select("wpaversion_5"),
+      WPS: select("wps_5"),
+      "Maximum clients": field("maxclients_5"),
+    },
+  ];
+}
+
+function parseEthernetPortTables(selects: ParsedSelect[]): Record<string, string>[] {
+  return [1, 2, 3, 4].map((port) => {
+    const media = selects.find((select) => select.name === `enet${port}_port${port}_media`);
+    const mdix = selects.find((select) => select.name === `enet${port}_port${port}_mdix`);
+    return {
+      Port: String(port),
+      "Configured media": media?.value ?? "",
+      "Configured MDI-X": mdix?.value ?? "",
+      "Supported media modes": optionLabels(media).join(", "),
+      "Supported MDI-X modes": optionLabels(mdix).join(", "),
+    };
+  });
+}
+
+function parseWifiMacFilterTables(selects: ParsedSelect[]): Record<string, string>[] {
+  const definitions = [
+    ["2.4 GHz", "Home", "wmacr1user"],
+    ["2.4 GHz", "Guest", "wmacr1guest"],
+    ["5 GHz", "Home", "wmacr2user"],
+  ] as const;
+  return definitions.map(([radio, network, name]) => ({
+    Radio: radio,
+    Network: network,
+    Filtering: selects.find((select) => select.name === name)?.value ?? "",
+  }));
+}
+
+function optionLabels(select: ParsedSelect | undefined): string[] {
+  return select?.optionDetails?.map((option) => option.label) ?? select?.options ?? [];
+}
+
+function parseFiberThresholdTables(html: string): Record<string, string>[] {
+  const records: Record<string, string>[] = [];
+  for (const match of html.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)) {
+    const heading = stripTags(match[1] ?? "");
+    if (!/\s+Currently\s+/i.test(heading)) continue;
+    const [measurement = "", current = ""] = heading.split(/\s+Currently\s+/, 2);
+    const remainder = html.slice((match.index ?? 0) + (match[0]?.length ?? 0));
+    const tableHtml = remainder.match(/<table\b[^>]*>[\s\S]*?<\/table>/i)?.[0] ?? "";
+    const table = extractTables(tableHtml)[0] ?? [];
+    for (const row of table.slice(1)) {
+      if (row.length !== 3) continue;
+      records.push({
+        Measurement: cleanText(measurement),
+        Current: cleanText(current),
+        State: cleanText(row[0] ?? ""),
+        Low: cleanText(row[1] ?? ""),
+        High: cleanText(row[2] ?? ""),
+      });
+    }
+  }
+  return records;
+}
+
+function parseVoiceStatisticsTables(html: string, includeSecrets: boolean): Record<string, string>[] {
+  const tables = extractTables(html);
+  const records: Record<string, string>[] = [];
+
+  for (const [index, line] of ["Line 1", "Line 2"].entries()) {
+    const table = tables[index] ?? [];
+    for (const row of table.slice(2)) {
+      if (row.length !== 5) continue;
+      records.push({
+        Section: "Call statistics",
+        Line: line,
+        Metric: cleanText(row[0] ?? ""),
+        "Last call incoming": cleanText(row[1] ?? ""),
+        "Last call outgoing": cleanText(row[2] ?? ""),
+        "Cumulative incoming": cleanText(row[3] ?? ""),
+        "Cumulative outgoing": cleanText(row[4] ?? ""),
+      });
+    }
+  }
+
+  const summary = tables[2] ?? [];
+  for (const row of summary.slice(2)) {
+    if (row.length !== 5) continue;
+    const metric = cleanText(row[0] ?? "");
+    records.push({
+      Section: "Call summary",
+      Line: "Both",
+      Metric: metric,
+      "Line 1 current": redactValue(metric, cleanText(row[1] ?? ""), includeSecrets),
+      "Line 1 last": redactValue(metric, cleanText(row[2] ?? ""), includeSecrets),
+      "Line 2 current": redactValue(metric, cleanText(row[3] ?? ""), includeSecrets),
+      "Line 2 last": redactValue(metric, cleanText(row[4] ?? ""), includeSecrets),
+    });
+  }
+
+  const cumulative = tables[3] ?? [];
+  for (const row of cumulative.slice(1)) {
+    if (row.length !== 3) continue;
+    records.push({
+      Section: "Cumulative since last reset",
+      Line: "Both",
+      Metric: cleanText(row[0] ?? ""),
+      "Line 1": cleanText(row[1] ?? ""),
+      "Line 2": cleanText(row[2] ?? ""),
+    });
+  }
+  return records;
+}
+
+function parseVoiceStatusTables(html: string, includeSecrets: boolean): Record<string, string>[] {
+  return extractTables(html).flatMap((table) => {
+    return table.slice(1).flatMap((row) => {
+      if (row.length !== 3) return [];
+      const metric = cleanText(row[0] ?? "");
+      if (!metric) return [];
+      return [{
+        Metric: metric,
+        "Line 1": redactValue(metric, cleanText(row[1] ?? ""), includeSecrets),
+        "Line 2": redactValue(metric, cleanText(row[2] ?? ""), includeSecrets),
+      }];
+    });
+  });
 }
 
 export function parseDevices(html: string): Device[] {
@@ -229,6 +512,8 @@ function parseFields(html: string, includeSecrets: boolean): ParsedField[] {
       value: redactValue(name, attrs.value ?? "", includeSecrets),
       checked: "checked" in attrs,
       sensitive,
+      ...("disabled" in attrs ? { disabled: true } : {}),
+      ...("readonly" in attrs ? { readOnly: true } : {}),
     });
   }
   return fields;
@@ -241,22 +526,29 @@ function parseSelects(html: string, includeSecrets: boolean): ParsedSelect[] {
     const name = attrs.name || attrs.id;
     if (!name) continue;
     const body = match[2] ?? "";
-    const options = [...body.matchAll(/<option\b([^>]*)>([\s\S]*?)<\/option>/gi)].map((option) => {
+    const optionDetails = [...body.matchAll(/<option\b([^>]*)>([\s\S]*?)<\/option>/gi)].map((option) => {
       const optionAttrs = getAttrs(`<option ${option[1] ?? ""}>`);
-      const text = stripTags(option[2] ?? "");
+      const label = stripTags(option[2] ?? "");
       return {
-        text,
-        value: optionAttrs.value || text,
+        label,
+        value: optionAttrs.value || label,
         selected: "selected" in optionAttrs,
+        disabled: "disabled" in optionAttrs,
       };
     });
-    const selected = options.find((option) => option.selected) ?? options[0];
+    const selected = optionDetails.find((option) => option.selected) ?? optionDetails[0];
     const sensitive = isSensitiveName(name);
     selects.push({
       name,
       value: redactValue(name, selected?.value ?? "", includeSecrets),
-      options: options.map((option) => redactValue(name, option.value, includeSecrets)),
+      options: optionDetails.map((option) => redactValue(name, option.value, includeSecrets)),
       sensitive,
+      optionDetails: optionDetails.map((option) => ({
+        ...option,
+        value: redactValue(name, option.value, includeSecrets),
+        label: redactValue(name, option.label, includeSecrets),
+      })),
+      ...("disabled" in attrs ? { disabled: true } : {}),
     });
   }
   return selects;
@@ -273,6 +565,8 @@ function parseTextareas(html: string, includeSecrets: boolean): ParsedTextarea[]
       name,
       value: redactValue(name, stripTags(match[2] ?? ""), includeSecrets),
       sensitive,
+      ...("disabled" in attrs ? { disabled: true } : {}),
+      ...("readonly" in attrs ? { readOnly: true } : {}),
     });
   }
   return textareas;
@@ -293,6 +587,7 @@ function parseButtons(html: string, includeSecrets: boolean): ParsedButton[] {
       value: redactValue(name, value, includeSecrets),
       label: redactValue(name, value || name, includeSecrets),
       sensitive,
+      ...("disabled" in attrs ? { disabled: true } : {}),
     });
   }
 
@@ -308,6 +603,7 @@ function parseButtons(html: string, includeSecrets: boolean): ParsedButton[] {
       value: redactValue(name, attrs.value ?? label, includeSecrets),
       label: redactValue(name, label || attrs.value || name, includeSecrets),
       sensitive,
+      ...("disabled" in attrs ? { disabled: true } : {}),
     });
   }
 

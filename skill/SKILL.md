@@ -32,6 +32,7 @@ bgw firewall status --json
 3. Use [references/command-map.md](references/command-map.md) when command shape is uncertain.
 4. Use [references/inspection-notes.md](references/inspection-notes.md) for router quirks, fallback behavior, and what to summarize.
 5. Prefer concise summaries over raw output. Device names, MACs, serials, public IPs, SSIDs, passwords, nonce values, access codes, logs, and topology should not be pasted casually.
+6. Use [`../docs/FUNCTIONALITY_COVERAGE_REVIEW.md`](../docs/FUNCTIONALITY_COVERAGE_REVIEW.md) to distinguish observed firmware data from locally derived labels, hardware-only capabilities, and unavailable metrics.
 
 ## Auth And Environment
 
@@ -53,7 +54,7 @@ Do not invent or call a router logout endpoint unless the current fixture data o
 
 For parser, command-shape, page-routing, and expected metadata comparisons, use local fixture data under `tests/fixtures` before hitting the live router. Generated fixture payloads are gitignored because redacted captures can still expose device names, SSIDs, topology, firmware details, and config shape.
 
-Only hit the live router when explicitly testing client/session behavior, recapturing fixtures with `bun run fixtures:capture`, or when the user asks for live verification.
+Only hit the live router when explicitly testing client/session behavior, recapturing fixtures with `bun run fixtures:capture`, or when the user asks for live verification. Prefer `--pages` with the smallest known endpoint set; the 37-page registry and fixture pack already cover normal parser and command inspection.
 
 ## Mutation Rules
 

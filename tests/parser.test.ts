@@ -193,6 +193,135 @@ test("parsePage extracts Wi-Fi current channels and widths", () => {
     <table><tr><th>Current Channel</th><td>60 (80 MHz),161 (80 MHz)</td><td>Automatic</td></tr></table>
   `);
 
-  expect(parsed.tables).toContainEqual({ Band: "2.4 GHz", "Current Channel": "6", "Channel Width": "20 MHz", Mode: "Automatic" });
-  expect(parsed.tables).toContainEqual({ Band: "5 GHz", "Current Channel": "60, 161", "Channel Width": "80 MHz", Mode: "Automatic" });
+  expect(parsed.tables).toContainEqual({ Radio: "2.4 GHz", "Current Channel": "6", "Channel Width": "20 MHz", Mode: "Automatic" });
+  expect(parsed.tables).toContainEqual({ Radio: "5 GHz low-band", "Current Channel": "60", "Channel Width": "80 MHz", Mode: "Automatic" });
+  expect(parsed.tables).toContainEqual({ Radio: "5 GHz high-band", "Current Channel": "161", "Channel Width": "80 MHz", Mode: "Automatic" });
+});
+
+test("parsePage preserves duplicate and blank router values with section context", () => {
+  const parsed = parsePage("broadbandstatistics", `
+    <h2>IPv4</h2><table><tr><th>Primary DNS</th><td>192.0.2.1</td></tr></table>
+    <h2>IPv6</h2><table><tr><th>Primary DNS</th><td></td></tr></table>
+  `);
+
+  expect(parsed.valueEntries).toEqual([
+    { section: "IPv4", label: "Primary DNS", value: "192.0.2.1" },
+    { section: "IPv6", label: "Primary DNS", value: "" },
+  ]);
+});
+
+test("parsePage preserves option labels, state, control metadata, and links", () => {
+  const parsed = parsePage("wconfig", `
+    <a href="/cgi-bin/wconfig_unified.ha">Basic Wi-Fi</a>
+    <a href="https://example.com/help">Support</a>
+    <input name="power" value="100" readonly>
+    <select name="standard" disabled>
+      <option value="ax" selected>Wi-Fi 6</option>
+      <option value="ac" disabled>Wi-Fi 5</option>
+    </select>
+  `);
+
+  expect(parsed.fields[0]).toMatchObject({ name: "power", readOnly: true });
+  expect(parsed.selects[0]).toMatchObject({
+    name: "standard",
+    value: "ax",
+    disabled: true,
+    optionDetails: [
+      { value: "ax", label: "Wi-Fi 6", selected: true, disabled: false },
+      { value: "ac", label: "Wi-Fi 5", selected: false, disabled: true },
+    ],
+  });
+  expect(parsed.links).toEqual([
+    { label: "Basic Wi-Fi", href: "/cgi-bin/wconfig_unified.ha", page: "wconfig_unified", kind: "router-page" },
+    { label: "Support", href: "https://example.com/help", kind: "external" },
+  ]);
+});
+
+test("parsePage gives Ethernet ports explicit current configuration and capabilities", () => {
+  const parsed = parsePage("etherlan", `
+    <select name="enet1_port1_media"><option value="Auto" selected>Auto</option><option value="5G">5G full duplex</option></select>
+    <select name="enet1_port1_mdix"><option value="Auto" selected>Auto</option><option value="On">On</option></select>
+  `);
+
+  expect(parsed.tables[0]).toEqual({
+    Port: "1",
+    "Configured media": "Auto",
+    "Configured MDI-X": "Auto",
+    "Supported media modes": "Auto, 5G full duplex",
+    "Supported MDI-X modes": "Auto, On",
+  });
+});
+
+test("parsePage labels fiber thresholds with their measurement", () => {
+  const parsed = parsePage("fiberstat", `
+    <h1>Rx Power&nbsp;&nbsp;Currently -141</h1>
+    <table><tr><th></th><th>Low</th><th>High</th></tr><tr><td>Alarm</td><td>0 (Threshold -322)</td><td>0 (Threshold -70)</td></tr></table>
+  `);
+
+  expect(parsed.tables).toEqual([{
+    Measurement: "Rx Power",
+    Current: "-141",
+    State: "Alarm",
+    Low: "0 (Threshold -322)",
+    High: "0 (Threshold -70)",
+  }]);
+});
+
+test("parsePage captures all voice statistics table shapes", () => {
+  const parsed = parsePage("voicestat", `
+    <table>
+      <tr><th>Line 1</th><th colspan="2">Last Call</th><th colspan="2">Cumulative</th></tr>
+      <tr><th></th><th>Incoming</th><th>Outgoing</th><th>Incoming</th><th>Outgoing</th></tr>
+      <tr><td>RTP Packet Loss</td><td>1</td><td>2</td><td>3</td><td>4</td></tr>
+    </table>
+    <table>
+      <tr><th>Line 2</th><th colspan="2">Last Call</th><th colspan="2">Cumulative</th></tr>
+      <tr><th></th><th>Incoming</th><th>Outgoing</th><th>Incoming</th><th>Outgoing</th></tr>
+      <tr><td>RTP Packet Loss</td><td>5</td><td>6</td><td>7</td><td>8</td></tr>
+    </table>
+    <table>
+      <tr><th></th><th colspan="2">Line 1</th><th colspan="2">Line 2</th></tr>
+      <tr><th></th><th>Current</th><th>Last</th><th>Current</th><th>Last</th></tr>
+      <tr><td>Far-End Caller Information</td><td>caller-a</td><td>caller-b</td><td>caller-c</td><td>caller-d</td></tr>
+    </table>
+    <table>
+      <tr><th></th><th>Line 1</th><th>Line 2</th></tr>
+      <tr><td>Number of Calls</td><td>9</td><td>10</td></tr>
+    </table>
+  `);
+
+  expect(parsed.tables).toHaveLength(4);
+  expect(parsed.tables[0]).toMatchObject({ Section: "Call statistics", Line: "Line 1", "Last call incoming": "1", "Cumulative outgoing": "4" });
+  expect(parsed.tables[2]).toMatchObject({ Section: "Call summary", "Line 1 current": "[redacted]", "Line 2 last": "[redacted]" });
+  expect(parsed.tables[3]).toMatchObject({ Section: "Cumulative since last reset", Metric: "Number of Calls", "Line 1": "9", "Line 2": "10" });
+});
+
+test("parsePage models advanced Wi-Fi radio and SSID configuration", () => {
+  const parsed = parsePage("wconfig", `
+    <input name="power" value="100">
+    <input name="ssidname11" value="Home">
+    <input name="maxclients" value="80">
+    <select name="wl80211on"><option value="on" selected>On</option></select>
+    <select name="standard"><option value="g/n" selected>G/N</option></select>
+    <select name="bandwidth"><option value="20" selected>20 MHz</option></select>
+    <select name="channelplusauto"><option value="auto" selected>Automatic</option></select>
+    <select name="ussidenable"><option value="on" selected>On</option></select>
+  `);
+
+  expect(parsed.tables).toContainEqual(expect.objectContaining({
+    Section: "Radio",
+    Radio: "2.4 GHz",
+    Enabled: "on",
+    Standard: "g/n",
+    Bandwidth: "20",
+    Channel: "auto",
+    "Power level (%)": "100",
+  }));
+  expect(parsed.tables).toContainEqual(expect.objectContaining({
+    Section: "SSID",
+    Radio: "2.4 GHz",
+    Network: "Home",
+    SSID: "Home",
+    "Maximum clients": "80",
+  }));
 });

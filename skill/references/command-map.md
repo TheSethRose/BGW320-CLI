@@ -27,9 +27,13 @@ bgw home-network status --json
 bgw home-network configure --json
 bgw home-network ipv6 --json
 bgw home-network wi-fi --json
+bgw home-network advanced-wi-fi --json
 bgw home-network mac-filtering --json
 bgw home-network subnets-dhcp --json
 bgw home-network ip-allocation --json
+bgw voice status --json
+bgw voice line-details --json
+bgw voice call-statistics --json
 bgw firewall status --json
 bgw firewall packet-filter --json
 bgw firewall nat-gaming --json

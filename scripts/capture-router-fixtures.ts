@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { BGW320Client } from "../src/client.js";
 import { envDefaultOptions } from "../src/config.js";
 import { parsedDataCount } from "../src/fetch.js";
+import { containsSensitiveFixtureValue, sanitizeRouterFixture } from "../src/fixture-sanitize.js";
 import { parsePage } from "../src/parser.js";
 import { routerTabs } from "../src/pages.js";
 import { withRouterSession } from "../src/session.js";
@@ -23,12 +24,14 @@ type ExpectedFixture = {
   notOnlyJunk: boolean;
   counts: {
     values: number;
+    valueEntries: number;
     tables: number;
     fields: number;
     selects: number;
     textareas: number;
     buttons: number;
     forms: number;
+    links: number;
   };
   valueKeys: string[];
   tableColumns: string[];
@@ -37,6 +40,8 @@ type ExpectedFixture = {
   textareaNames: string[];
   buttonNames: string[];
   formActions: string[];
+  linkTargets: string[];
+  valueEntryLabels: string[];
 };
 
 const root = new URL("..", import.meta.url).pathname;
@@ -94,19 +99,20 @@ for (const pageResult of sweep) {
   const page = pageResult.page;
   process.stdout.write(`capturing ${page}... `);
   if (pageResult.rawHtml) {
-    const html = sanitizeRouterText(pageResult.rawHtml);
+    const html = sanitizeRouterFixture(pageResult.rawHtml);
     const parsed = parsePage(page, html);
+    assertFixtureSafe(html, parsed);
     const expected = expectedFor(page, parsed, pageResult.ok && !isJunkOnly(parsed));
-    await writeFixtureSet(page, html, parsed, pageResult.error ? { ...expected, error: sanitizeRouterText(pageResult.error) } : expected);
+    await writeFixtureSet(page, html, parsed, pageResult.error ? { ...expected, error: sanitizeRouterFixture(pageResult.error) } : expected);
     captured += 1;
     process.stdout.write(pageResult.ok ? "ok\n" : `captured error page: ${pageResult.error ?? "unusable response"}\n`);
   } else {
     const message = pageResult.error ?? "Router did not return page HTML.";
     process.stdout.write(`failed: ${message}\n`);
-    const html = `<!-- bgw fixture capture failed for ${page}: ${sanitizeRouterText(message)} -->\n`;
+    const html = `<!-- bgw fixture capture failed for ${page}: ${sanitizeRouterFixture(message)} -->\n`;
     const parsed = parsePage(page, html);
     const expected = expectedFor(page, parsed, false);
-    await writeFixtureSet(page, html, parsed, { ...expected, error: sanitizeRouterText(message) });
+    await writeFixtureSet(page, html, parsed, { ...expected, error: sanitizeRouterFixture(message) });
   }
 }
 
@@ -129,12 +135,14 @@ function expectedFor(page: string, parsed: ParsedPage, pageLoads: boolean): Expe
     notOnlyJunk: dataCount > 0 && !isJunkOnly(parsed),
     counts: {
       values: Object.keys(parsed.values).length,
+      valueEntries: parsed.valueEntries?.length ?? 0,
       tables: parsed.tables.length,
       fields: parsed.fields.length,
       selects: parsed.selects.length,
       textareas: parsed.textareas.length,
       buttons: parsed.buttons.length,
       forms: parsed.forms.length,
+      links: parsed.links?.length ?? 0,
     },
     valueKeys: Object.keys(parsed.values).sort(),
     tableColumns,
@@ -143,6 +151,8 @@ function expectedFor(page: string, parsed: ParsedPage, pageLoads: boolean): Expe
     textareaNames: parsed.textareas.map((textarea) => textarea.name).sort(),
     buttonNames: parsed.buttons.map((button) => button.name).sort(),
     formActions: [...new Set(parsed.forms.map((form) => form.action))].sort(),
+    linkTargets: [...new Set(parsed.links?.map((link) => link.href) ?? [])].sort(),
+    valueEntryLabels: [...new Set(parsed.valueEntries?.map((entry) => entry.label) ?? [])].sort(),
   };
 }
 
@@ -165,18 +175,8 @@ function isJunkOnly(parsed: ParsedPage): boolean {
   return parsedDataCount(parsed) === 0;
 }
 
-function sanitizeRouterText(value: string): string {
-  return value
-    .replace(/\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/gi, "[redacted-mac]")
-    .replace(/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g, "[redacted-ip]")
-    .replace(/\b(?:[0-9a-f]{1,4}:){3,7}[0-9a-f]{1,4}\b/gi, "[redacted-ipv6]")
-    .replace(/\b(?=[0-9a-f:]*::)(?:[0-9a-f]{0,4}:){1,7}[0-9a-f]{0,4}\b/gi, "[redacted-ipv6]")
-    .replace(/(name=["'](?:nonce|hashpassword|password|.*?pass.*?|.*?key.*?|.*?ssid.*?|wps.?pin|serial(?:number)?|hostname|device.?name)["'][^>]*value=["'])[^"']*(["'])/gi, "$1[redacted]$2")
-    .replace(/(value=["'])[^"']*(["'][^>]*name=["'](?:nonce|hashpassword|password|.*?pass.*?|.*?key.*?|.*?ssid.*?|wps.?pin|serial(?:number)?|hostname|device.?name)["'])/gi, "$1[redacted]$2");
-}
-
-function containsSensitiveFixtureValue(value: string): boolean {
-  return /"value":"(?!\[redacted\])[^"]+"[^{}]{0,160}"sensitive":true/i.test(value)
-    || /\b[a-f0-9]{32}\b/i.test(value)
-    || /\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/i.test(value);
+function assertFixtureSafe(html: string, parsed: ParsedPage): void {
+  if (containsSensitiveFixtureValue(html) || containsSensitiveFixtureValue(JSON.stringify(parsed))) {
+    throw new Error(`Refusing to write ${parsed.page} because sensitive fixture data remains after sanitization.`);
+  }
 }

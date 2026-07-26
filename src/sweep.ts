@@ -29,12 +29,14 @@ export type SweepPage = {
   title?: string;
   heading?: string;
   valueCount: number;
+  valueEntryCount?: number;
   tableRows: number;
   fieldCount: number;
   selectCount: number;
   textareaCount: number;
   buttonCount: number;
   formCount: number;
+  linkCount?: number;
   dataCount: number;
   dataObtainable: boolean;
   useful: boolean;
@@ -329,12 +331,14 @@ function pageFromParsed(tab: RouterTab, parsed: ParsedPage, options: {
     title: parsed.title,
     heading: parsed.heading,
     valueCount: Object.keys(parsed.values).length,
+    valueEntryCount: parsed.valueEntries?.length ?? 0,
     tableRows: parsed.tables.length,
     fieldCount: parsed.fields.length,
     selectCount: parsed.selects.length,
     textareaCount: parsed.textareas.length,
     buttonCount: parsed.buttons.length,
     formCount: parsed.forms.length,
+    linkCount: parsed.links?.length ?? 0,
     dataCount: parsedDataCount(parsed),
     ...(options.statusCode !== undefined ? { statusCode: options.statusCode } : {}),
     ...(options.error ? { error: options.error } : {}),

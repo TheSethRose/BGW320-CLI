@@ -115,14 +115,16 @@ export function printScans(scans: PageScan[]): void {
     Fallback: scan.fallback ? "yes" : "",
     Title: scan.title ?? scan.error ?? "",
     Values: String(scan.valueCount ?? 0),
+    Entries: String(scan.valueEntryCount ?? 0),
     Tables: String(scan.tableRows ?? 0),
     Fields: String(scan.fieldCount ?? 0),
     Selects: String(scan.selectCount ?? 0),
     Buttons: String(scan.buttonCount ?? 0),
     Forms: String(scan.formCount ?? 0),
+    Links: String(scan.linkCount ?? 0),
     Data: String(scan.dataCount ?? 0),
     Guarded: scan.dangerous ? "yes" : "",
-  })), ["Section", "Tab", "Page", "Status", "Fallback", "Title", "Values", "Tables", "Fields", "Selects", "Buttons", "Forms", "Data", "Guarded"]);
+  })), ["Section", "Tab", "Page", "Status", "Fallback", "Title", "Values", "Entries", "Tables", "Fields", "Selects", "Buttons", "Forms", "Links", "Data", "Guarded"]);
 }
 
 export function printPageFetchError(result: ParsedPageResult): void {
@@ -282,6 +284,8 @@ function summarizeParsedPage(page: ParsedPage): Record<string, string> {
       return broadbandConfigSummary(page);
     case "wconfig_unified":
       return wifiSummary(page);
+    case "wconfig":
+      return advancedWifiSummary(page);
     case "dhcpserver":
       return dhcpServerSummary(page);
     case "ippass":
@@ -345,6 +349,9 @@ function printSpecializedPage(page: ParsedPage, limit: number): boolean {
     case "wconfig_unified":
       printWifiPage(page);
       return true;
+    case "wconfig":
+      printAdvancedWifiPage(page, limit);
+      return true;
     case "etherlan":
       printFormStatePage(page, ["ipaddr", "ipmask"], ["lanipv6"]);
       return true;
@@ -387,7 +394,7 @@ function printSpecializedPage(page: ParsedPage, limit: number): boolean {
     case "voice":
     case "voiceconfig":
     case "voicestat":
-      printVoicePage(page);
+      printVoicePage(page, limit);
       return true;
     case "syslog":
       printConfigPage(page, ["Syslog", "Server IP Address", "Server Port", "Log Level"]);
@@ -464,7 +471,22 @@ function printBroadbandConfigPage(page: ParsedPage): void {
 
 function printWifiPage(page: ParsedPage): void {
   printKeyValues(wifiSummary(page));
+  if (page.tables.length > 0) {
+    process.stdout.write("\nCurrent radios\n");
+    printRows(page.tables, ["Radio", "Current Channel", "Channel Width", "Mode"]);
+  }
   printActionsAndControls(page, 20);
+}
+
+function printAdvancedWifiPage(page: ParsedPage, limit: number): void {
+  printKeyValues(advancedWifiSummary(page));
+  if (page.tables.length > 0) {
+    process.stdout.write("\nRadio and SSID configuration\n");
+    const keys = [...new Set(page.tables.flatMap((row) => Object.keys(row)))];
+    printRows(page.tables.slice(0, limit), keys);
+    printOverflow(page.tables.length, limit);
+  }
+  printActionsAndControls(page, limit);
 }
 
 function printDhcpServerPage(page: ParsedPage): void {
@@ -526,10 +548,18 @@ function printConfigPage(page: ParsedPage, preferredKeys: string[]): void {
   printActionsAndControls(page, 20);
 }
 
-function printVoicePage(page: ParsedPage): void {
+function printVoicePage(page: ParsedPage, limit: number): void {
   const rows = page.tables;
   if (rows.length > 0) {
-    printRows(rows, Object.keys(rows[0] ?? {}));
+    const sections = countBy(rows.filter((row) => row.Section), "Section");
+    printKeyValues({
+      "Reported rows": String(rows.length),
+      ...(Object.keys(sections).length > 0 ? { Sections: formatCounts(sections) } : {}),
+    });
+    process.stdout.write("\n");
+    const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+    printRows(rows.slice(0, limit), keys);
+    printOverflow(rows.length, limit);
   } else {
     printKeyValues(page.values);
   }
@@ -578,17 +608,20 @@ function printFormDetails(page: ParsedPage): void {
     Type: field.type,
     Value: field.value,
     Checked: field.checked ? "yes" : "",
+    Disabled: field.disabled ? "yes" : "",
+    Readonly: field.readOnly ? "yes" : "",
     Sensitive: field.sensitive ? "yes" : "",
-  })), ["Name", "Type", "Value", "Checked", "Sensitive"]);
+  })), ["Name", "Type", "Value", "Checked", "Disabled", "Readonly", "Sensitive"]);
 
   if (page.selects.length > 0) {
     process.stdout.write("\nSelects\n");
     printRows(page.selects.map((select) => ({
       Name: select.name,
       Value: select.value,
-      Options: select.options.join(", "),
+      Options: (select.optionDetails ?? []).map((option) => option.label === option.value ? option.value : `${option.label}=${option.value}`).join(", ") || select.options.join(", "),
+      Disabled: select.disabled ? "yes" : "",
       Sensitive: select.sensitive ? "yes" : "",
-    })), ["Name", "Value", "Options", "Sensitive"]);
+    })), ["Name", "Value", "Options", "Disabled", "Sensitive"]);
   }
 
   if (page.textareas.length > 0) {
@@ -596,8 +629,10 @@ function printFormDetails(page: ParsedPage): void {
     printRows(page.textareas.map((textarea) => ({
       Name: textarea.name,
       Value: textarea.value,
+      Disabled: textarea.disabled ? "yes" : "",
+      Readonly: textarea.readOnly ? "yes" : "",
       Sensitive: textarea.sensitive ? "yes" : "",
-    })), ["Name", "Value", "Sensitive"]);
+    })), ["Name", "Value", "Disabled", "Readonly", "Sensitive"]);
   }
 
   if (page.buttons.length > 0) {
@@ -607,8 +642,9 @@ function printFormDetails(page: ParsedPage): void {
       Type: button.type,
       Value: button.value,
       Label: button.label,
+      Disabled: button.disabled ? "yes" : "",
       Sensitive: button.sensitive ? "yes" : "",
-    })), ["Name", "Type", "Value", "Label", "Sensitive"]);
+    })), ["Name", "Type", "Value", "Label", "Disabled", "Sensitive"]);
   }
 
   if (page.forms.length > 0) {
@@ -621,6 +657,26 @@ function printFormDetails(page: ParsedPage): void {
       Textareas: form.textareaNames.join(", "),
       Buttons: form.buttonNames.join(", "),
     })), ["Method", "Action", "Fields", "Selects", "Textareas", "Buttons"]);
+  }
+
+  if ((page.valueEntries?.length ?? 0) > 0) {
+    process.stdout.write("\nRouter-reported values\n");
+    printRows(page.valueEntries!.map((entry) => ({
+      Section: entry.section,
+      Label: entry.label,
+      Value: entry.value,
+      Default: entry.defaultValue ?? "",
+    })), ["Section", "Label", "Value", "Default"]);
+  }
+
+  if ((page.links?.length ?? 0) > 0) {
+    process.stdout.write("\nLinks\n");
+    printRows(page.links!.map((link) => ({
+      Label: link.label,
+      Kind: link.kind,
+      Page: link.page ?? "",
+      Href: link.href,
+    })), ["Label", "Kind", "Page", "Href"]);
   }
 }
 
@@ -717,6 +773,22 @@ function wifiSummary(page: ParsedPage): Record<string, string> {
     "Guest SSID enabled": onOff(selectValue(page, "u_gssidenable")),
     "Guest access": guestAccess(selectValue(page, "u_gssidisolate")),
     "Guest subnet": guestSubnetOctet ? `192.168.${guestSubnetOctet}.0/24` : "",
+  });
+}
+
+function advancedWifiSummary(page: ParsedPage): Record<string, string> {
+  const radioRows = page.tables.filter((row) => row.Section === "Radio");
+  const ssidRows = page.tables.filter((row) => row.Section === "SSID");
+  return compactRecord({
+    "Radio configurations": radioRows.length > 0 ? String(radioRows.length) : undefined,
+    "SSID configurations": ssidRows.length > 0 ? String(ssidRows.length) : undefined,
+    "2.4 GHz enabled": selectValue(page, "wl80211on"),
+    "2.4 GHz standard": selectValue(page, "standard"),
+    "2.4 GHz bandwidth": selectValue(page, "bandwidth"),
+    "2.4 GHz channel": selectValue(page, "channelplusauto"),
+    "5 GHz enabled": selectValue(page, "wl80211on_5"),
+    "5 GHz standard": selectValue(page, "standard_5"),
+    "5 GHz bandwidth": selectValue(page, "bandwidth_5"),
   });
 }
 

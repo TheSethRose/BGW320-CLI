@@ -16,9 +16,11 @@ bgw broadband fiber-status --json
 bgw home-network status --json
 bgw firewall status --json
 bgw diagnostics logs --json
-bgw sweep --json --delay 750
-bgw audit --json --delay 750
+bgw sweep --pages <specific-page-list> --json --delay 750
+bgw audit --pages <specific-page-list> --json --delay 750
 ```
+
+Broad all-page sweeps remain configuration-read-only, but they are session-expensive. Run them only when full coverage is explicitly needed, never concurrently, and stop on session-pool or authentication errors.
 
 ## Sensitive Output Controls
 

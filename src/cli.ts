@@ -629,13 +629,16 @@ Most-used read commands:
     Connected device list. Falls back to IP Allocation if devices.ha hangs.
 
   bgw wifi [--forms] [--json]
-    Wi-Fi configuration and controls. Passwords/keys stay redacted by default.
+    Unified Wi-Fi status/configuration. Passwords/keys stay redacted by default.
 
   bgw broadband status | configure | fiber-status
     Broadband link details, editable broadband config, or optical/fiber module data.
 
-  bgw home-network status | configure | ipv6 | wi-fi | mac-filtering | subnets-dhcp | ip-allocation
-    LAN, IPv6, Wi-Fi, MAC filtering, DHCP/subnet, and IP allocation surfaces.
+  bgw home-network status | configure | ipv6 | wi-fi | advanced-wi-fi | mac-filtering | subnets-dhcp | ip-allocation
+    LAN, IPv6, basic/advanced Wi-Fi, MAC filtering, DHCP/subnet, and IP allocation surfaces.
+
+  bgw voice status | line-details | call-statistics
+    Router-reported POTS/SIP line state, provisioned line details, and complete call-statistic tables.
 
   bgw firewall status | packet-filter | nat-gaming | public-subnet-hosts | ip-passthrough | firewall-advanced | security-options
     Firewall status/config pages. security-options falls back to Firewall Status
@@ -649,7 +652,8 @@ Generic inspection:
     Fetch any tab or CGI page. Use --raw for router HTML.
 
   bgw inspect <page-or-tab> [--json]
-    Same as page --forms: includes fields, selects, buttons, forms, and submit targets.
+    Same as page --forms: includes preserved values, fields, options, textareas,
+    buttons, forms, links, disabled/readonly state, and submit targets.
 
   bgw tabs | section <section> | sitemap | coverage
     Show the local tab map, one section, live sitemap, or sitemap-vs-CLI coverage.
@@ -661,8 +665,8 @@ Generic inspection:
 
   bgw sweep [--json] [--pages diag,dhcpserver] [--include-parsed] [--forms] [--out router-dumps/latest]
     Shared traversal command for every mapped tab. Default output is compact
-    status/count metadata. Full parsed payloads, form details, raw HTML, and
-    artifact writing are opt-in.
+    status/count metadata, including duplicate value-entry and link counts.
+    Full parsed payloads, form details, raw HTML, and artifact writing are opt-in.
 
   bgw scan [--json]
     Compatibility alias for compact sweep metadata.

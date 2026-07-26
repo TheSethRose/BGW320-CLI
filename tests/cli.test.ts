@@ -11,6 +11,8 @@ test("help explains operation, safety, and high-value commands", () => {
   expect(result.stdout).toContain("Auth:");
   expect(result.stdout).toContain("Most-used read commands:");
   expect(result.stdout).toContain("bgw device status");
+  expect(result.stdout).toContain("advanced-wi-fi");
+  expect(result.stdout).toContain("bgw voice status | line-details | call-statistics");
   expect(result.stdout).toContain("bgw sweep");
   expect(result.stdout).toContain("bgw audit");
   expect(result.stdout).toContain("bgw session status | clear-cache");

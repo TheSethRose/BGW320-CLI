@@ -3,7 +3,7 @@ import { listSections, resolvePage, resolveSectionCommand, routerTabs, tabsForSe
 
 test("routerTabs covers requested router sections", () => {
   expect(listSections()).toEqual(["Device", "Broadband", "Home Network", "Voice", "Firewall", "Diagnostics"]);
-  expect(routerTabs).toHaveLength(36);
+  expect(routerTabs).toHaveLength(37);
 });
 
 test("routerTabs includes every tab from the stated objective", () => {
@@ -21,6 +21,7 @@ test("routerTabs includes every tab from the stated objective", () => {
     "Home Network/Configure",
     "Home Network/IPv6",
     "Home Network/Wi-Fi",
+    "Home Network/Advanced Wi-Fi",
     "Home Network/MAC Filtering",
     "Home Network/Subnets & DHCP",
     "Home Network/IP Allocation",
@@ -50,6 +51,7 @@ test("routerTabs includes every tab from the stated objective", () => {
 test("resolvePage accepts raw CGI IDs and human tab paths", () => {
   expect(resolvePage("wconfig_unified")).toBe("wconfig_unified");
   expect(resolvePage("Home Network/Wi-Fi")).toBe("wconfig_unified");
+  expect(resolvePage("Home Network/Advanced Wi-Fi")).toBe("wconfig");
   expect(resolvePage("Subnets & DHCP")).toBe("dhcpserver");
   expect(resolvePage("NAT/Gaming")).toBe("apphosting");
   expect(resolvePage("Device/Restart Device")).toBe("restart");
@@ -73,6 +75,7 @@ test("resolveSectionCommand resolves human command tree", () => {
   expect(resolveSectionCommand("device", [])?.page).toBe("home");
   expect(resolveSectionCommand("broadband", ["fiber-status"])?.page).toBe("fiberstat");
   expect(resolveSectionCommand("home-network", ["wi-fi"])?.page).toBe("wconfig_unified");
+  expect(resolveSectionCommand("home-network", ["advanced-wi-fi"])?.page).toBe("wconfig");
   expect(resolveSectionCommand("firewall", ["nat-gaming"])?.page).toBe("apphosting");
   expect(resolveSectionCommand("diagnostics", ["nat-table"])?.page).toBe("nattable");
 });

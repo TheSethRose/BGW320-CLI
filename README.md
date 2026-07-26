@@ -67,6 +67,7 @@ bgw tabs
 bgw section Diagnostics
 bgw broadband fiber-status
 bgw home-network wi-fi --json
+bgw home-network advanced-wi-fi --json
 bgw firewall nat-gaming
 bgw diagnostics logs --limit 50
 ```
@@ -126,6 +127,7 @@ bgw home-network status
 bgw home-network configure
 bgw home-network ipv6
 bgw home-network wi-fi
+bgw home-network advanced-wi-fi
 bgw home-network mac-filtering
 bgw home-network subnets-dhcp
 bgw home-network ip-allocation
@@ -166,13 +168,13 @@ bgw inspect "Diagnostics/Troubleshoot" --forms
 bgw home-network wi-fi --forms
 ```
 
-Readable page output shows available buttons and control counts by default. JSON includes parsed values, tables, fields, selects, textareas, buttons, and forms.
+Readable page output shows available buttons and control counts by default. JSON includes parsed values, duplicate-preserving `valueEntries`, tables, fields, select option labels/state, textareas, buttons, forms, links, and disabled/readonly metadata. Use `--forms` to show those preserved details in terminal output.
 
 Several configuration pages have page-specific summaries built from current form state so default terminal output stays useful:
 
 - `broadband configure`: source override and MTU values.
 - `device access-code`, `device remote-access`, `device restart-device`: current form/action state with sensitive values redacted and restart surfaced as an explicit guarded action.
-- `home-network configure`, `home-network ipv6`, `home-network wi-fi`, `home-network mac-filtering`: compact current network form state, including home/guest SSID state with passwords redacted.
+- `home-network configure`, `home-network ipv6`, `home-network wi-fi`, `home-network advanced-wi-fi`, `home-network mac-filtering`: compact current network form state, including per-port configured Ethernet modes, basic current channel rows, advanced radio/SSID controls, and per-radio MAC-filter state. Passwords, SSIDs embedded as defaults, and WPS PINs stay redacted in fixtures.
 - `home-network subnets-dhcp`: gateway/subnet, DHCP range, lease, public subnet, inbound, and cascaded-router state.
 - `firewall packet-filter`, `firewall custom-services`, `firewall nat-gaming`, `firewall public-subnet-hosts`: current firewall/NAT form state; NAT/Gaming shows selected service/device and available service/device counts instead of dumping every dropdown option.
 - `firewall ip-passthrough`: allocation mode, default server, passthrough mode/MAC, and lease.
@@ -194,9 +196,9 @@ bgw sweep --forms --json
 bgw sweep --out router-dumps/latest
 ```
 
-Default sweep output does not dump raw HTML or full parsed payloads. Use:
+Default sweep output does not dump raw HTML or full parsed payloads. It reports counts for unique values, duplicate-preserving value entries, tables, controls, forms, and links. Use:
 
-- `--include-parsed` for parsed values, tables, fields, selects, textareas, buttons, forms, fallback sections, and device-list fallback data in JSON.
+- `--include-parsed` for parsed values, value entries, tables, fields, select option metadata, textareas, buttons, forms, links, fallback sections, and device-list fallback data in JSON.
 - `--forms` for detailed controls, buttons, forms, and submit targets.
 - `--pages <csv>` to limit traversal.
 - `--raw --pages <single-page>` to emit one raw HTML page.
@@ -208,7 +210,11 @@ Default sweep output does not dump raw HTML or full parsed payloads. Use:
 
 `devices` first tries `devices.ha`. If that page hangs, it falls back to `ipalloc.ha` and returns degraded device records with IP, name, MAC, status, and allocation. The primary page can also expose connection speed and IPv6 lifetime fields, but it does not establish disconnect history, stable identity across private MAC addresses, or trustworthy user-assigned names. Treat `last activity` as a timestamp reported by the gateway, not proof of a disconnect.
 
-The Wi-Fi page exposes configured SSIDs, enabled state, security controls, isolation, and current channel/width rows on firmware that renders them. It does not provide RSSI, noise floor, retry counts, association/roaming history, disconnect events, or enough evidence to diagnose RF health. Channel-selection buttons are mutating controls and are never invoked by read commands.
+The unified Wi-Fi page exposes configured SSIDs, enabled state, security controls, isolation, and current channel/width rows on firmware that renders them. When the 5 GHz row reports two channels, the CLI labels them low-band and high-band using their channel ranges; that radio split is locally derived while the channel numbers remain router-reported. The linked Advanced Wi-Fi page adds standards, configured bandwidth/channel selection, power, maximum clients, hidden SSID, WPA/WPS state, and separate private/guest controls, but its observed 5 GHz controls are combined rather than independent per-radio settings.
+
+Neither observed Wi-Fi page provides client RSSI, noise floor, retry counts, association/roaming history, disconnect events, or enough evidence to diagnose RF health or congestion. Channel-selection, WPS, update, and save buttons are mutating controls and are never invoked by read commands.
+
+`broadband fiber-status` preserves router-reported optical receive/transmit power, temperature, voltage, bias, operational state, and alarm thresholds when present. Values and units are passed through as reported; the CLI does not infer optical health or service quality from them. `voice call-statistics` preserves all observed line, summary, and cumulative rows while caller/phone fields stay redacted by default.
 
 `home-network status` first tries `lanstatistics.ha`. If that page hangs, it falls back to LAN configure, Subnets & DHCP, IP Allocation, and Wi-Fi configuration data.
 
@@ -251,7 +257,7 @@ BGW_ACCESS_CODE='<access-code>' bun run fixtures:capture
 
 The capture is sweep-backed, serialized through the same per-router session coordinator, paced at no less than 750 ms between pages, and read-only at the configuration level: it performs GET requests plus the login POST required by the router. It redacts access-code-adjacent fields, Wi-Fi identifiers, device identifiers, hashes, MAC addresses, and IP addresses before writing owner-only fixture files.
 
-`tests/router-fixtures.test.ts` verifies that a complete fixture pack covers every mapped page, that parsing the saved HTML exactly matches the saved parsed JSON, and that each expected file records whether data, useful fields/tables, buttons/forms, redaction, and non-junk parsing are present.
+`tests/router-fixtures.test.ts` verifies that a complete 37-page fixture pack covers every mapped page, that parsing the saved HTML exactly matches the saved parsed JSON, and that each expected file records value/value-entry, table, control, form, link, redaction, and non-junk parsing receipts.
 
 ## Diagnostics
 
@@ -337,7 +343,9 @@ The router normally presents a self-signed certificate, so the CLI currently acc
 
 ## Router Tab Coverage
 
-`coverage` currently maps every page in the live router sitemap: Device, Broadband, Home Network, Voice, Firewall, Diagnostics, plus `sitemap` itself.
+The local registry contains the 36 observed sitemap pages plus the linked read-only `wconfig` Advanced Wi-Fi endpoint, for 37 mapped pages total. `coverage` reports sitemap differences explicitly, so the linked endpoint can appear under “Not in live sitemap” without being treated as missing.
+
+The implementation and capability reconciliation, including product-guide-only hardware features and observed-firmware limitations, is recorded in [`docs/FUNCTIONALITY_COVERAGE_REVIEW.md`](docs/FUNCTIONALITY_COVERAGE_REVIEW.md).
 
 If a router page hangs or changes, use:
 

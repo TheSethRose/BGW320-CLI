@@ -18,12 +18,14 @@ type ExpectedFixture = {
   notOnlyJunk: boolean;
   counts: {
     values: number;
+    valueEntries: number;
     tables: number;
     fields: number;
     selects: number;
     textareas: number;
     buttons: number;
     forms: number;
+    links: number;
   };
   valueKeys: string[];
   tableColumns: string[];
@@ -32,6 +34,8 @@ type ExpectedFixture = {
   textareaNames: string[];
   buttonNames: string[];
   formActions: string[];
+  linkTargets: string[];
+  valueEntryLabels: string[];
 };
 
 const fixtureRoot = join(process.cwd(), "tests", "fixtures");
@@ -82,12 +86,14 @@ for (const page of fixturePackComplete ? mappedPages : []) {
     }
     expect(expected.counts).toEqual({
       values: Object.keys(parsed.values).length,
+      valueEntries: parsed.valueEntries?.length ?? 0,
       tables: parsed.tables.length,
       fields: parsed.fields.length,
       selects: parsed.selects.length,
       textareas: parsed.textareas.length,
       buttons: parsed.buttons.length,
       forms: parsed.forms.length,
+      links: parsed.links?.length ?? 0,
     });
     expect(expected.valueKeys).toEqual(Object.keys(parsed.values).sort());
     expect(expected.tableColumns).toEqual([...new Set(parsed.tables.flatMap((row) => Object.keys(row)))].sort());
@@ -96,6 +102,8 @@ for (const page of fixturePackComplete ? mappedPages : []) {
     expect(expected.textareaNames).toEqual(parsed.textareas.map((textarea) => textarea.name).sort());
     expect(expected.buttonNames).toEqual(parsed.buttons.map((button) => button.name).sort());
     expect(expected.formActions).toEqual([...new Set(parsed.forms.map((form) => form.action))].sort());
+    expect(expected.linkTargets).toEqual([...new Set(parsed.links?.map((link) => link.href) ?? [])].sort());
+    expect(expected.valueEntryLabels).toEqual([...new Set(parsed.valueEntries?.map((entry) => entry.label) ?? [])].sort());
     expect(JSON.stringify(parsed)).not.toMatch(/"value":"(?!\[redacted\])[^"]+"[^{}]{0,160}"sensitive":true|\b[a-f0-9]{32}\b|\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/i);
   });
 }

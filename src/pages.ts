@@ -30,6 +30,7 @@ export const routerTabs: RouterTab[] = [
   { section: "Home Network", label: "Configure", page: "etherlan", aliases: ["home network configure", "etherlan", "ethernet lan"] },
   { section: "Home Network", label: "IPv6", page: "ip6lan", aliases: ["ipv6", "ip6lan"] },
   { section: "Home Network", label: "Wi-Fi", page: "wconfig_unified", aliases: ["wifi", "wi-fi", "wireless", "wconfig_unified"] },
+  { section: "Home Network", label: "Advanced Wi-Fi", page: "wconfig", aliases: ["advanced wifi", "advanced wi-fi", "wifi advanced", "wconfig"] },
   { section: "Home Network", label: "MAC Filtering", page: "wmacauth", aliases: ["mac filtering", "wifi mac filtering", "wmacauth"] },
   { section: "Home Network", label: "Subnets & DHCP", page: "dhcpserver", aliases: ["subnets", "dhcp", "subnets dhcp", "subnets and dhcp", "dhcpserver"] },
   { section: "Home Network", label: "IP Allocation", page: "ipalloc", aliases: ["ip allocation", "ipalloc"] },
