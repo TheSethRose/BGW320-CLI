@@ -237,6 +237,14 @@ BGW_SESSION_WAIT_INTERVAL_MS=10000
 
 Waiting does not retry bad access codes, random connection failures, or parser failures. An active five-minute local pool cooldown still fails fast with `--wait-for-session`; do not clear it simply to force another authentication attempt. `bgw session clear-cache` acquires the same per-router lock and is intended only for explicit local-state troubleshooting.
 
+Set `BGW_SESSION_CACHE_TTL_MS=0` for memory-only authentication sessions. The
+coordinator will neither import nor write the session-cookie cache, and clears
+the client's cookies when the operation finishes, including on errors. Existing
+cache files from earlier cached runs are left untouched. Per-router locking and
+the persistent session-pool cooldown remain enabled. This is not server-side
+logout or guaranteed memory zeroization. Prefer a single paced operation over
+repeated logins, because memory-only mode does not reuse sessions across commands.
+
 ## Router Fixture Pack
 
 Parser ground truth belongs under:

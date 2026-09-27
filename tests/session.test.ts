@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
@@ -90,6 +90,59 @@ test("session cache atomically replaces a symlink without writing its target", a
 test("clearSessionState removes local cache and cooldown", async () => {
   await withTempSessionDir(async () => {
     await clearSessionState(routerSessionIdentity("http://router.local"));
+  });
+});
+
+test("zero cache TTL keeps an operation session in memory only", async () => {
+  await withTempSessionDir(async (dir) => {
+    const client = testClient();
+    await withRouterSession(client, { ...options(), cacheTtlMs: 0 }, async () => {
+      client.importSession({ origin: client.sessionIdentity(), authenticated: true, cookies: { sid: "synthetic" } });
+      expect(client.hasAuthenticatedSession()).toBe(true);
+    });
+    expect(client.hasAuthenticatedSession()).toBe(false);
+    expect(await readdir(dir)).toEqual([]);
+  });
+});
+
+test("zero cache TTL does not import or replace a previous cache", async () => {
+  await withTempSessionDir(async (dir) => {
+    const first = testClient();
+    first.importSession({ origin: first.sessionIdentity(), authenticated: true, cookies: { sid: "synthetic" } });
+    await withRouterSession(first, options(), async () => "ok");
+    const [name] = await readdir(dir);
+    const path = join(dir, name!);
+    const before = await readFile(path, "utf8");
+    const next = testClient();
+    await withRouterSession(next, { ...options(), cacheTtlMs: 0 }, async () => {
+      expect(next.hasAuthenticatedSession()).toBe(false);
+    });
+    expect(await readFile(path, "utf8")).toBe(before);
+  });
+});
+
+test("zero cache TTL clears the in-memory session after an operation error", async () => {
+  await withTempSessionDir(async (dir) => {
+    const client = testClient();
+    await expect(withRouterSession(client, { ...options(), cacheTtlMs: 0 }, async () => {
+      client.importSession({ origin: client.sessionIdentity(), authenticated: true, cookies: { sid: "synthetic" } });
+      throw new Error("operation failed");
+    })).rejects.toThrow("operation failed");
+    expect(client.hasAuthenticatedSession()).toBe(false);
+    expect(await readdir(dir)).toEqual([]);
+  });
+});
+
+test("zero cache TTL preserves the session-pool cooldown", async () => {
+  await withTempSessionDir(async () => {
+    await expect(withRouterSession(testClient(), { ...options(), cacheTtlMs: 0 }, async () => {
+      throw new RouterSessionPoolFullError();
+    })).rejects.toBeInstanceOf(RouterSessionPoolFullError);
+    let called = false;
+    await expect(withRouterSession(testClient(), { ...options(), cacheTtlMs: 0 }, async () => {
+      called = true;
+    })).rejects.toBeInstanceOf(RouterSessionPoolFullError);
+    expect(called).toBe(false);
   });
 });
 

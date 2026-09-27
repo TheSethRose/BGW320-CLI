@@ -42,9 +42,10 @@ export async function withRouterSession<T>(
   await mkdir(dirname(paths.cache), { recursive: true, mode: 0o700 });
   await chmod(dirname(paths.cache), 0o700);
   const release = await acquireLock(paths.lock, options.lockTimeoutMs);
+  const persistSession = options.cacheTtlMs > 0;
   try {
     await applyCooldown(paths.cooldown);
-    const cached = await readJson<CachedSession>(paths.cache);
+    const cached = persistSession ? await readJson<CachedSession>(paths.cache) : undefined;
     if (cached && cached.expiresAt > Date.now()) {
       client.importSession(cached);
     }
@@ -56,7 +57,7 @@ export async function withRouterSession<T>(
       return result;
     }
 
-    if (client.hasAuthenticatedSession()) {
+    if (persistSession && client.hasAuthenticatedSession()) {
       await writeJson(paths.cache, {
         ...client.exportSession(),
         version: 1,
@@ -73,6 +74,7 @@ export async function withRouterSession<T>(
     }
     throw error;
   } finally {
+    if (!persistSession) client.clearSession();
     await release();
   }
 }
